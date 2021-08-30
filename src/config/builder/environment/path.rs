@@ -8,6 +8,8 @@ use std::{
     path::PathBuf,
 };
 
+use crate::{config::builder::hoard::Error, env_vars::expand_env_in_path};
+
 /// A conditional structure that tests whether or not the contained path exists.
 ///
 /// The path can be anything from a file, directory, symbolic link, or
@@ -22,16 +24,27 @@ impl TryInto<bool> for PathExists {
     type Error = Infallible;
 
     fn try_into(self) -> Result<bool, Self::Error> {
-        let PathExists(path) = self;
-        tracing::trace!("checking if path \"{}\" exists", path.to_string_lossy());
-        Ok(path.exists())
+        let path_expand = expand_env_in_path(&self.to_string()).map_err(|err| Error::ExpandEnv {
+            path:  self.to_string(),
+            error: err,
+        });
+
+        println!("===============HERE=============");
+
+        match path_expand {
+            Ok(path) => {
+                tracing::trace!("checking if path \"{}\" exists", path.to_string_lossy());
+                Ok(path.exists())
+            },
+            Err(_) => Ok(false),
+        }
     }
 }
 
 impl fmt::Display for PathExists {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let PathExists(path) = self;
-        write!(f, "PATH EXISTS {}", path.to_string_lossy())
+        write!(f, "{}", path.to_string_lossy())
     }
 }
 

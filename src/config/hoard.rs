@@ -3,9 +3,7 @@
 //! builder `Hoard`s for more details.
 
 pub use super::builder::hoard::Config;
-use shellexpand::LookupError;
 use std::{
-    borrow::Cow,
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
@@ -77,21 +75,7 @@ impl Pile {
     /// # Errors
     ///
     /// Various sorts of I/O errors as the different [`Error`] variants.
-    fn copy(input_src: &Path, dest: &Path) -> Result<(), Error> {
-        let expanded = shellexpand::full(&input_src.display().to_string())
-            .unwrap_or_else(|_| {
-                Cow::from(
-                    LookupError {
-                        var_name: "Unknown environment variable".into(),
-                        cause:    std::env::VarError::NotPresent,
-                    }
-                    .to_string(),
-                )
-            })
-            .to_string();
-
-        let src = Path::new(&expanded);
-
+    fn copy(src: &Path, dest: &Path) -> Result<(), Error> {
         let _span = tracing::trace_span!(
             "copy",
             source = ?src,

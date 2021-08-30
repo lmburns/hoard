@@ -1,7 +1,7 @@
 [envs]
 [envs.zsh]
     exe_exists = ["zsh"]
-    path_exists = ["/Users/lucasburns/.config/zsh"]
+    path_exists = ["${HOME}/.config/zsh"]
 
 [envs.macos]
     os = ["macos"]
@@ -23,10 +23,10 @@
 [hoards]
 [hoards.zsh]
     [hoards.zsh.git_token]
-        "zsh|macos" = "$HOME/.config/zsh/zsh.d/git-token.zsh"
-    # [hoards.zsh.bindings]
-    #     "zsh|macos" = "/Users/lucasburns/.config/zsh/zsh.d/keybindings.zsh"
-    # [hoards.zsh.aliases]
-    #     "zsh|macos" = "/Users/lucasburns/.config/zsh/zsh.d/aliases.zsh"
+        "zsh|macos" = "$ZDOTDIR/zsh.d/git-token.zsh"
+    [hoards.zsh.bindings]
+        "zsh|macos" = "~/.config/zsh/zsh.d/keybindings.zsh"
+    [hoards.zsh.aliases]
+        "zsh|macos" = "${ZDOTDIR}/zsh.d/aliases.zsh"
 
 # vim: ft=toml:et:sw=0:ts=4:sts=4:fdm=marker:fmr={{{,}}}:

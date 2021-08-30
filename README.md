@@ -2,6 +2,7 @@
 
 # TODO
 * Expand '~' and any variables
+* Expand variables and tildes in env paths
 * Add option to ignore directories
 * Execute command like `homemaker`?
 
