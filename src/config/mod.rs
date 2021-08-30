@@ -4,8 +4,7 @@ pub use self::builder::Builder;
 use self::hoard::Hoard;
 use crate::command::Command;
 use directories::ProjectDirs;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 use thiserror::Error;
 
 pub mod builder;
@@ -26,7 +25,7 @@ pub enum Error {
     #[error("failed to back up {name}: {error}")]
     Backup {
         /// The name of the hoard that failed to back up.
-        name: String,
+        name:  String,
         /// The error that occurred.
         #[source]
         error: hoard::Error,
@@ -41,7 +40,7 @@ pub enum Error {
     #[error("failed to back up {name}: {error}")]
     Restore {
         /// The name of the hoard that failed to restore.
-        name: String,
+        name:  String,
         /// The error that occurred.
         #[source]
         error: hoard::Error,
@@ -60,7 +59,7 @@ pub struct Config {
     /// Path to a configuration file.
     config_file: PathBuf,
     /// All of the configured hoards.
-    hoards: BTreeMap<String, Hoard>,
+    hoards:      BTreeMap<String, Hoard>,
 }
 
 impl Default for Config {
@@ -84,12 +83,13 @@ impl Config {
 
     /// Load a [`Config`] from CLI arguments and then configuration file.
     ///
-    /// Alias for [`Builder::from_args_then_file`] that then builds the builder into
-    /// a [`Config`].
+    /// Alias for [`Builder::from_args_then_file`] that then builds the builder
+    /// into a [`Config`].
     ///
     /// # Errors
     ///
-    /// The error returned by [`Builder::from_args_then_file`], wrapped in [`Error::Builder`].
+    /// The error returned by [`Builder::from_args_then_file`], wrapped in
+    /// [`Error::Builder`].
     pub fn load() -> Result<Self, Error> {
         tracing::info!("loading configuration...");
         let config = Builder::from_args_then_file()
@@ -143,10 +143,10 @@ impl Config {
         tracing::trace!(command = ?self.command, "running command");
         match &self.command {
             Command::Validate => {
-                tracing::info!("configuration is valid")
-            }
+                tracing::info!("configuration is valid");
+            },
             Command::Backup { hoards } => {
-                let hoards = self.get_hoards(&hoards);
+                let hoards = self.get_hoards(hoards);
                 for name in hoards {
                     let prefix = self.get_prefix(name);
                     let hoard = self.get_hoard(name)?;
@@ -158,9 +158,9 @@ impl Config {
                         error,
                     })?;
                 }
-            }
+            },
             Command::Restore { hoards } => {
-                let hoards = self.get_hoards(&hoards);
+                let hoards = self.get_hoards(hoards);
                 for name in hoards {
                     let prefix = self.get_prefix(name);
                     let hoard = self.get_hoard(name)?;
@@ -172,7 +172,7 @@ impl Config {
                         error,
                     })?;
                 }
-            }
+            },
         }
 
         Ok(())

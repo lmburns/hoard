@@ -1,15 +1,17 @@
 //! See [`PathExists`].
 
 use serde::{Deserialize, Serialize};
-use std::convert::{Infallible, TryInto};
-use std::fmt;
-use std::fmt::Formatter;
-use std::path::PathBuf;
+use std::{
+    convert::{Infallible, TryInto},
+    fmt,
+    fmt::Formatter,
+    path::PathBuf,
+};
 
 /// A conditional structure that tests whether or not the contained path exists.
 ///
-/// The path can be anything from a file, directory, symbolic link, or otherwise, so long as
-/// *something* with that name exists.
+/// The path can be anything from a file, directory, symbolic link, or
+/// otherwise, so long as *something* with that name exists.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Hash)]
 #[serde(transparent)]
 #[repr(transparent)]

@@ -1,13 +1,15 @@
 //! This module contains processed versions of builder
-//! [`Hoard`](crate::config::builder::hoard::Hoard)s. See documentation for builder `Hoard`s
-//! for more details.
+//! [`Hoard`](crate::config::builder::hoard::Hoard)s. See documentation for
+//! builder `Hoard`s for more details.
 
 pub use super::builder::hoard::Config;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
-use std::borrow::Cow;
 use shellexpand::LookupError;
+use std::{
+    borrow::Cow,
+    collections::BTreeMap,
+    fs, io,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 /// Errors that can happen while backing up or restoring a hoard.
@@ -17,9 +19,9 @@ pub enum Error {
     #[error("failed to copy {src} to {dest}: {error}")]
     CopyFile {
         /// The path of the source file.
-        src: PathBuf,
+        src:   PathBuf,
         /// The path of the destination file.
-        dest: PathBuf,
+        dest:  PathBuf,
         /// The I/O error that occurred.
         #[source]
         error: io::Error,
@@ -28,7 +30,7 @@ pub enum Error {
     #[error("failed to create {path}: {error}")]
     CreateDir {
         /// The path of the directory to create.
-        path: PathBuf,
+        path:  PathBuf,
         /// The error that occurred while creating.
         #[source]
         error: io::Error,
@@ -37,16 +39,20 @@ pub enum Error {
     #[error("cannot read directory {path}: {error}")]
     ReadDir {
         /// The path of the file or directory to read.
-        path: PathBuf,
+        path:  PathBuf,
         /// The error that occurred while reading.
         #[source]
         error: io::Error,
     },
-    /// Both the source and destination exist but are not both directories or both files.
-    #[error("both source (\"{src}\") and destination (\"{dest}\") exist but are not both files or both directories")]
+    /// Both the source and destination exist but are not both directories or
+    /// both files.
+    #[error(
+        "both source (\"{src}\") and destination (\"{dest}\") exist but are not both files or \
+         both directories"
+    )]
     TypeMismatch {
         /// Source path/
-        src: PathBuf,
+        src:  PathBuf,
         /// Destination path.
         dest: PathBuf,
     },
@@ -59,9 +65,10 @@ pub struct Pile {
     pub config: Option<Config>,
     /// The path to hoard.
     ///
-    /// The path is optional because it will almost always be set by processing a configuration
-    /// file and it is possible that none of the environment combinations match.
-    pub path: Option<PathBuf>,
+    /// The path is optional because it will almost always be set by processing
+    /// a configuration file and it is possible that none of the environment
+    /// combinations match.
+    pub path:   Option<PathBuf>,
 }
 
 impl Pile {
@@ -70,7 +77,21 @@ impl Pile {
     /// # Errors
     ///
     /// Various sorts of I/O errors as the different [`Error`] variants.
-    fn copy(src: &Path, dest: &Path) -> Result<(), Error> {
+    fn copy(input_src: &Path, dest: &Path) -> Result<(), Error> {
+        let expanded = shellexpand::full(&input_src.display().to_string())
+            .unwrap_or_else(|_| {
+                Cow::from(
+                    LookupError {
+                        var_name: "Unknown environment variable".into(),
+                        cause:    std::env::VarError::NotPresent,
+                    }
+                    .to_string(),
+                )
+            })
+            .to_string();
+
+        let src = Path::new(&expanded);
+
         let _span = tracing::trace_span!(
             "copy",
             source = ?src,
@@ -78,28 +99,13 @@ impl Pile {
         )
         .entered();
 
-        let expanded = shellexpand::full(&src.display().to_string())
-            .unwrap_or_else(|_| {
-                Cow::from(
-                    LookupError {
-                        var_name: "Unknown environment variable".into(),
-                        cause:    std::env::VarError::NotPresent,
-                    }
-                    .to_string()
-                )
-            })
-            .to_string();
-
-        #[allow(clippy::shadow_unrelated)]
-        let src = Path::new(&expanded);
-
         // Fail if src and dest exist but are not both file or directory.
         if src.exists() == dest.exists()
             && src.is_dir() != dest.is_dir()
             && src.is_file() != dest.is_file()
         {
             return Err(Error::TypeMismatch {
-                src: src.to_owned(),
+                src:  src.to_owned(),
                 dest: dest.to_owned(),
             });
         }
@@ -108,13 +114,13 @@ impl Pile {
             let _span = tracing::trace_span!("is_directory").entered();
 
             let dir_contents = fs::read_dir(src).map_err(|err| Error::ReadDir {
-                path: src.to_owned(),
+                path:  src.to_owned(),
                 error: err,
             })?;
 
             for item in dir_contents {
                 let item = item.map_err(|err| Error::ReadDir {
-                    path: src.to_owned(),
+                    path:  src.to_owned(),
                     error: err,
                 })?;
 
@@ -133,7 +139,7 @@ impl Pile {
                     "ensuring parent directories for destination",
                 );
                 fs::create_dir_all(parent).map_err(|err| Error::CreateDir {
-                    path: dest.to_owned(),
+                    path:  dest.to_owned(),
                     error: err,
                 })?;
             }
@@ -145,8 +151,8 @@ impl Pile {
             );
 
             fs::copy(src.to_owned(), dest).map_err(|err| Error::CopyFile {
-                src: src.to_owned(),
-                dest: dest.to_owned(),
+                src:   src.to_owned(),
+                dest:  dest.to_owned(),
                 error: err,
             })?;
         } else {

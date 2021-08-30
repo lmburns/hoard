@@ -1,16 +1,18 @@
 //! See [`EnvVariable`].
 
 use serde::{Deserialize, Serialize};
-use std::convert::{Infallible, TryInto};
-use std::fmt;
-use std::fmt::Formatter;
+use std::{
+    convert::{Infallible, TryInto},
+    fmt,
+    fmt::Formatter,
+};
 
-/// A conditional structure that checks if the given environment variable exists and optionally if
-/// it is set to a specific value.
+/// A conditional structure that checks if the given environment variable exists
+/// and optionally if it is set to a specific value.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Hash)]
 pub struct EnvVariable {
     /// The variable to check.
-    pub var: String,
+    pub var:      String,
     /// The expected value to check against. If `None`, this matches any value.
     pub expected: Option<String>,
 }
@@ -28,7 +30,7 @@ impl TryInto<bool> for EnvVariable {
                 Some(expected) => {
                     tracing::trace!(%var, %expected, "checking if variable matches expected value");
                     val == expected.as_str()
-                }
+                },
             },
         };
         Ok(result)
@@ -53,7 +55,7 @@ mod tests {
     #[serial_test::serial]
     fn test_display_env_no_value() {
         let env = EnvVariable {
-            var: "TESTING_VAR".to_string(),
+            var:      "TESTING_VAR".to_string(),
             expected: None,
         };
         assert_eq!("ENV ${TESTING_VAR} IS SET", env.to_string());
@@ -63,7 +65,7 @@ mod tests {
     #[serial_test::serial]
     fn test_display_env_with_value() {
         let env = EnvVariable {
-            var: "TESTING_VAR".to_string(),
+            var:      "TESTING_VAR".to_string(),
             expected: Some("testing value".to_string()),
         };
         assert_eq!("ENV ${TESTING_VAR} == \"testing value\"", env.to_string());
@@ -103,7 +105,7 @@ mod tests {
         for (var, val) in std::env::vars() {
             std::env::remove_var(&var);
             let is_set: bool = EnvVariable {
-                var: var.clone(),
+                var:      var.clone(),
                 expected: None,
             }
             .try_into()

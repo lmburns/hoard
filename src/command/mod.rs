@@ -18,12 +18,14 @@ pub enum Command {
     Validate,
     /// Back up the given hoard(s).
     Backup {
-        /// The name(s) of the hoard(s) to back up. Will back up all hoards if empty.
+        /// The name(s) of the hoard(s) to back up. Will back up all hoards if
+        /// empty.
         hoards: Vec<String>,
     },
     /// Restore the files from the given hoard to the filesystem.
     Restore {
-        /// The name(s) of the hoard(s) to restore. Will restore all hoards if empty.
+        /// The name(s) of the hoard(s) to restore. Will restore all hoards if
+        /// empty.
         hoards: Vec<String>,
     },
 }

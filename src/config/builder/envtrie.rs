@@ -1,46 +1,57 @@
 //! Notes
-//! - Length of matching path takes precedence over the strength of any one segment.
+//! - Length of matching path takes precedence over the strength of any one
+//!   segment.
 //! - If two paths have the same length and score, the first one is taken.
-//! - Weights of each segment are determined by taking sets of mutually exclusive
-//!   segments and creating a DAG to determine weights.
+//! - Weights of each segment are determined by taking sets of mutually
+//!   exclusive segments and creating a DAG to determine weights.
 //! - No current design for making a short path win out over a longer one.
 
-use petgraph::algo::toposort;
-use petgraph::graph::DiGraph;
-use std::collections::{BTreeMap, HashSet};
-use std::path::{Path, PathBuf};
+use petgraph::{algo::toposort, graph::DiGraph};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 /// Errors that may occur while building or evaluating an [`EnvTrie`].
 #[derive(Debug, Error, PartialEq)]
 pub enum Error {
-    /// Cannot decide between two environments based on length and mutual exclusion.
-    /// The two `String`s are the environment conditions, so the user can look at their
-    /// configuration file and resolve the issue.
-    #[error("\"{0}\" and \"{1}\" have equal weight. Consider a more specific condition for the preferred one or make them mutually exclusive")]
+    /// Cannot decide between two environments based on length and mutual
+    /// exclusion. The two `String`s are the environment conditions, so the
+    /// user can look at their configuration file and resolve the issue.
+    #[error(
+        "\"{0}\" and \"{1}\" have equal weight. Consider a more specific condition for the \
+         preferred one or make them mutually exclusive"
+    )]
     Indecision(String, String),
-    /// One [`Pile`](super::hoard::Pile) has the same combination of environments defined
-    /// multiple times.
+    /// One [`Pile`](super::hoard::Pile) has the same combination of
+    /// environments defined multiple times.
     #[error("The same condition is defined twice with paths {0} and {1}")]
     DoubleDefine(PathBuf, PathBuf),
-    /// No environment exists with the given name, but a [`Pile`](super::hoard::Pile) thinks
-    /// one does.
+    /// No environment exists with the given name, but a
+    /// [`Pile`](super::hoard::Pile) thinks one does.
     #[error("\"{0}\" is not an environment that exists")]
     EnvironmentNotExist(String),
     /// No environments were parsed for a [`Pile`](super::hoard::Pile) entry.
     #[error("Parsed 0 environments")]
     NoEnvironments,
-    /// One or more exclusivity lists combined form an exclusion cycle containing the given
-    /// environment.
+    /// One or more exclusivity lists combined form an exclusion cycle
+    /// containing the given environment.
     #[error("Environment \"{0}\" is simultaneously preferred to and not preferred to another")]
     WeightCycle(String),
     /// The given condition string is improperly formatted
     ///
-    /// The string contains at least one non-empty environment name and at least one empty one.
-    #[error("Condition \"{0}\" contains empty environment. Make sure it does not start or end with {}, or have multiple consecutive {}", ENV_SEPARATOR, ENV_SEPARATOR)]
+    /// The string contains at least one non-empty environment name and at least
+    /// one empty one.
+    #[error(
+        "Condition \"{0}\" contains empty environment. Make sure it does not start or end with \
+         {}, or have multiple consecutive {}",
+        ENV_SEPARATOR,
+        ENV_SEPARATOR
+    )]
     EmptyEnvironment(String),
-    /// A condition string contains two environment names that are considered mutually exclusive and
-    /// will probably never happen.
+    /// A condition string contains two environment names that are considered
+    /// mutually exclusive and will probably never happen.
     #[error("Condition \"{0}\" contains two mutually exclusive environments")]
     CombinedMutuallyExclusive(String),
 }
@@ -49,9 +60,9 @@ pub enum Error {
 #[derive(Clone, Debug, PartialEq)]
 struct Node {
     score: usize,
-    tree: Option<BTreeMap<String, Node>>,
+    tree:  Option<BTreeMap<String, Node>>,
     value: Option<PathBuf>,
-    name: String,
+    name:  String,
 }
 
 fn merge_two_trees(
@@ -67,11 +78,11 @@ fn merge_two_trees(
             None => {
                 tracing::trace!("key only exists in other tree: moving",);
                 val
-            }
+            },
             Some(prev) => {
                 tracing::trace!("key exists in both trees: merging");
                 prev.merge_with(val)?
-            }
+            },
         };
         tracing::trace!(?node, "inserting merged node for key {} into tree", key);
         acc.insert(key, node);
@@ -83,10 +94,10 @@ fn merge_two_trees(
 #[derive(Clone, Debug, PartialEq)]
 #[allow(single_use_lifetimes)]
 struct Evaluation<'a> {
-    name: String,
-    path: Option<&'a Path>,
+    name:  String,
+    path:  Option<&'a Path>,
     score: usize,
-    len: usize,
+    len:   usize,
 }
 
 impl Node {
@@ -137,10 +148,10 @@ impl Node {
 
         // Default evaluation if subtree does not exist
         let mut eval = Evaluation {
-            name: self.name.clone(),
-            path: self.value.as_ref().map(PathBuf::as_ref),
+            name:  self.name.clone(),
+            path:  self.value.as_ref().map(PathBuf::as_ref),
             score: 0,
-            len: 1, // this node
+            len:   1, // this node
         };
 
         if let Some(tree) = &self.tree {
@@ -167,7 +178,7 @@ impl Node {
                 let node_eval = match node.get_evaluation(envs) {
                     Ok(node_eval) => node_eval,
                     Err(err) => match err {
-                        Error::Indecision(left, right) => {
+                        Error::Indecision(left, right) =>
                             return Err(Error::Indecision(
                                 if left.is_empty() {
                                     self.name.clone()
@@ -179,15 +190,14 @@ impl Node {
                                 } else {
                                     format!("{}|{}", self.name, right)
                                 },
-                            ))
-                        }
+                            )),
                         _ => return Err(err),
                     },
                 };
 
                 // Path must exist
                 match (eval.path, node_eval.path) {
-                    (_, None) => {}
+                    (_, None) => {},
                     (None, Some(_)) => eval = node_eval,
                     (Some(_), Some(_)) => {
                         if node_eval.len > eval.len
@@ -216,7 +226,7 @@ impl Node {
                             return Err(Error::Indecision(eval.name, name.clone()));
                         }
                         // Otherwise, keep current one.
-                    }
+                    },
                 }
             }
         }
@@ -231,13 +241,14 @@ impl Node {
     }
 }
 
-/// A Trie-like structure to help match against different environments and determine the
-/// best-matching path.
+/// A Trie-like structure to help match against different environments and
+/// determine the best-matching path.
 ///
-/// One `EnvTrie` is created for every pile. One hoard may then have multiple `EnvTrie`s created
-/// for it. This means that it is possible to have different sets of environments match for
-/// different piles. That is, if one pile's `EnvTrie` matches on `"foo|bar"` and a second pile
-/// does not have a configuration for `"foo|bar"`, it is possible that `"bar|baz"` is the best
+/// One `EnvTrie` is created for every pile. One hoard may then have multiple
+/// `EnvTrie`s created for it. This means that it is possible to have different
+/// sets of environments match for different piles. That is, if one pile's
+/// `EnvTrie` matches on `"foo|bar"` and a second pile does not have a
+/// configuration for `"foo|bar"`, it is possible that `"bar|baz"` is the best
 /// match instead.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnvTrie(Node);
@@ -350,7 +361,8 @@ impl EnvTrie {
     ///
     /// # Errors
     ///
-    /// Any [`enum@Error`] relating to parsing or validating environment condition strings.
+    /// Any [`enum@Error`] relating to parsing or validating environment
+    /// condition strings.
     pub fn new(
         environments: &BTreeMap<String, PathBuf>,
         exclusive_list: &[Vec<String>],
@@ -363,7 +375,8 @@ impl EnvTrie {
         let weighted_map = get_weighted_map(exclusive_list)?;
         let exclusivity_map = get_exclusivity_map(exclusive_list);
 
-        // Building a list of linked lists that represent paths from the root of a tree to a leaf.
+        // Building a list of linked lists that represent paths from the root of a tree
+        // to a leaf.
         tracing::trace!("building trees for each environment string");
         let trees: Vec<_> = environments
             .iter()
@@ -437,8 +450,8 @@ impl EnvTrie {
     ///
     /// # Errors
     ///
-    /// - [`Error::EnvironmentNotExist`] if one of the environments does not exist in the
-    ///   `environments` argument.
+    /// - [`Error::EnvironmentNotExist`] if one of the environments does not
+    ///   exist in the `environments` argument.
     pub fn get_path(&self, environments: &BTreeMap<String, bool>) -> Result<Option<&Path>, Error> {
         tracing::trace!(
             trie = ?self,
@@ -455,11 +468,11 @@ mod tests {
     use super::*;
     use maplit::btreemap;
     use once_cell::sync::Lazy;
-    use std::collections::BTreeMap;
-    use std::path::PathBuf;
+    use std::{collections::BTreeMap, path::PathBuf};
 
     // Every const has a name of the form `LABEL_<char>_<int>`.
-    // All consts with the same `<char>` are mutually exclusive for the purposes of testing.
+    // All consts with the same `<char>` are mutually exclusive for the purposes of
+    // testing.
     const LABEL_A_1: &str = "a1";
     const LABEL_A_2: &str = "a2";
     const LABEL_A_3: &str = "a3";
@@ -498,12 +511,18 @@ mod tests {
                 }
 
                 true
-            }
+            },
         }
     }
 
     macro_rules! trie_test_ignore_score {
-        (name: $name:ident, environments: $envs:expr, exclusivity: $excl:expr, expected: $result:expr) => {
+        (
+            name:
+            $name:ident,environments:
+            $envs:expr,exclusivity:
+            $excl:expr,expected:
+            $result:expr
+        ) => {
             #[test]
             fn $name() {
                 let environments: BTreeMap<String, PathBuf> = $envs;
@@ -515,13 +534,18 @@ mod tests {
                 match (res, expected) {
                     (Ok(trie), Err(err)) => {
                         panic!("expected error\n{:#?},\ngot trie\n{:#?}", err, trie)
-                    }
+                    },
                     (Err(err), Ok(trie)) => {
                         panic!("expected trie\n{:#?},\ngot error\n{:#?}", trie, err)
-                    }
-                    (Ok(EnvTrie(node1)), Ok(EnvTrie(node2))) => if !node_eq_ignore_score(&node1, &node2) {
-                        panic!("received trie did not match expected\nReceived: {:#?}\nExpected: {:#?}", node1, node2)
                     },
+                    (Ok(EnvTrie(node1)), Ok(EnvTrie(node2))) =>
+                        if !node_eq_ignore_score(&node1, &node2) {
+                            panic!(
+                                "received trie did not match expected\nReceived: {:#?}\nExpected: \
+                     {:#?}",
+                                node1, node2
+                            )
+                        },
                     (Err(err), Err(exp)) => assert_eq!(
                         err, exp,
                         "received (left) error does not match expected (right) error"

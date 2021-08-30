@@ -1,6 +1,6 @@
-use hoard::config::builder::envtrie::Error as TrieError;
-use hoard::config::builder::hoard::Error as HoardError;
-use hoard::config::builder::{Builder, Error as BuildError};
+use hoard::config::builder::{
+    envtrie::Error as TrieError, hoard::Error as HoardError, Builder, Error as BuildError,
+};
 use maplit::hashset;
 
 #[test]

@@ -10,13 +10,13 @@ use crate::combinator::Combinator;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::envvar::EnvVariable;
-pub use self::exe::ExeExists;
-pub use self::hostname::Hostname;
-pub use self::os::OperatingSystem;
-pub use self::path::PathExists;
-use std::convert::{Infallible, TryInto};
-use std::fmt;
+pub use self::{
+    envvar::EnvVariable, exe::ExeExists, hostname::Hostname, os::OperatingSystem, path::PathExists,
+};
+use std::{
+    convert::{Infallible, TryInto},
+    fmt,
+};
 
 /// Errors that may occur while evaluating an [`Environment`].
 #[derive(Debug, Error)]
@@ -33,7 +33,7 @@ pub enum Error {
         /// The invalid condition string.
         condition_str: String,
         /// A message indicating why the condition is invalid.
-        message: String,
+        message:       String,
     },
 }
 
@@ -59,7 +59,8 @@ impl From<Infallible> for Error {
 ///     path_exists = [["/home/shadow53/Music", "/home/shadow53/Videos"]]
 /// ```
 ///
-/// See the documentation for the following types for more how these items are interpreted.
+/// See the documentation for the following types for more how these items are
+/// interpreted.
 ///
 /// - [`Combinator<T>`]
 /// - [`EnvVariable`]
@@ -70,10 +71,10 @@ impl From<Infallible> for Error {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Hash)]
 #[serde(deny_unknown_fields)]
 pub struct Environment {
-    hostname: Option<Combinator<Hostname>>,
-    os: Option<Combinator<OperatingSystem>>,
-    env: Option<Combinator<EnvVariable>>,
-    exe_exists: Option<Combinator<ExeExists>>,
+    hostname:    Option<Combinator<Hostname>>,
+    os:          Option<Combinator<OperatingSystem>>,
+    env:         Option<Combinator<EnvVariable>>,
+    exe_exists:  Option<Combinator<ExeExists>>,
     path_exists: Option<Combinator<PathExists>>,
 }
 
@@ -156,7 +157,7 @@ impl Environment {
             if comb.is_only_and() || comb.is_complex() {
                 return Err(Error::InvalidCondition {
                     condition_str: comb.to_string(),
-                    message: String::from("machines cannot have multiple hostnames at once!"),
+                    message:       String::from("machines cannot have multiple hostnames at once!"),
                 });
             }
         }
@@ -165,7 +166,7 @@ impl Environment {
             if comb.is_only_and() || comb.is_complex() {
                 return Err(Error::InvalidCondition {
                     condition_str: comb.to_string(),
-                    message: String::from(
+                    message:       String::from(
                         "machines cannot have multiple operating systems at once!",
                     ),
                 });
@@ -179,10 +180,10 @@ impl Environment {
 impl Default for Environment {
     fn default() -> Self {
         Environment {
-            hostname: None,
-            os: None,
-            env: None,
-            exe_exists: None,
+            hostname:    None,
+            os:          None,
+            env:         None,
+            exe_exists:  None,
             path_exists: None,
         }
     }
@@ -206,17 +207,17 @@ mod tests {
             let hostname = Hostname("hostname.one".into());
             let os = OperatingSystem("linux".into());
             let env_var = EnvVariable {
-                var: "TEST_VARIABLE".to_string(),
+                var:      "TEST_VARIABLE".to_string(),
                 expected: None,
             };
             let exe_exists = ExeExists("test".into());
             let path_exists = PathExists("/test/path".into());
 
             let env = Environment {
-                hostname: Some(Combinator(vec![Inner::Single(hostname.clone())])),
-                os: Some(Combinator(vec![Inner::Single(os.clone())])),
-                env: Some(Combinator(vec![Inner::Single(env_var.clone())])),
-                exe_exists: Some(Combinator(vec![Inner::Single(exe_exists.clone())])),
+                hostname:    Some(Combinator(vec![Inner::Single(hostname.clone())])),
+                os:          Some(Combinator(vec![Inner::Single(os.clone())])),
+                env:         Some(Combinator(vec![Inner::Single(env_var.clone())])),
+                exe_exists:  Some(Combinator(vec![Inner::Single(exe_exists.clone())])),
                 path_exists: Some(Combinator(vec![Inner::Single(path_exists.clone())])),
             };
 
@@ -253,7 +254,7 @@ mod tests {
                 .expect_err("expecting two hostnames at the same time should fail");
 
             match err {
-                Error::InvalidCondition { .. } => {}
+                Error::InvalidCondition { .. } => {},
                 err => panic!("unexpected error: {}", err),
             }
         }
@@ -277,7 +278,7 @@ mod tests {
                 .validate()
                 .expect_err("expecting two hostnames at the same time should fail");
             match err {
-                Error::InvalidCondition { .. } => {}
+                Error::InvalidCondition { .. } => {},
                 err => panic!("unexpected error: {}", err),
             }
         }
@@ -319,7 +320,7 @@ mod tests {
                 .validate()
                 .expect_err("expecting two operating systems at the same time should fail");
             match err {
-                Error::InvalidCondition { .. } => {}
+                Error::InvalidCondition { .. } => {},
                 err => panic!("unexpected error: {}", err),
             }
         }
@@ -343,7 +344,7 @@ mod tests {
                 .validate()
                 .expect_err("expecting two operating systems at the same time should fail");
             match err {
-                Error::InvalidCondition { .. } => {}
+                Error::InvalidCondition { .. } => {},
                 err => panic!("unexpected error: {}", err),
             }
         }

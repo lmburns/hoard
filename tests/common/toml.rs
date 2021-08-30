@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-use std::{fs, path::Path};
+use std::{fmt::Debug, fs, path::Path};
 
 pub use ::toml::*;
 use serde::de::DeserializeOwned;

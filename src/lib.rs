@@ -1,9 +1,10 @@
 //! A CLI program for managing files across multiple devices.
 //!
-//! You can think of `hoard` as a dotfiles management tool, though its intended use extends
-//! beyond that. `hoard` can be used for backing up and restoring any kind of file from/to any
-//! location on the filesystem. In fact, the original purpose behind writing it was to synchronize
-//! save files for games that don't support cloud saves.
+//! You can think of `hoard` as a dotfiles management tool, though its intended
+//! use extends beyond that. `hoard` can be used for backing up and restoring
+//! any kind of file from/to any location on the filesystem. In fact, the
+//! original purpose behind writing it was to synchronize save files for games
+//! that don't support cloud saves.
 //!
 //! # Terminology
 //!
@@ -11,10 +12,11 @@
 //!
 //! - [`Hoard`](crate::config::builder::hoard::Hoard): A collection at least one
 //!   [`Pile`](crate::config::builder::hoard::Pile).
-//! - [`Pile`](crate::config::builder::hoard::Pile): A single file or directory in a
-//!   [`Hoard`](crate::config::builder::hoard::Hoard).
-//! - [`Environment`](crate::config::builder::environment::Environment): A combination of conditions
-//!   that can be used to determine where to find files in a [`Pile`](crate::config::builder::hoard::Pile).
+//! - [`Pile`](crate::config::builder::hoard::Pile): A single file or directory
+//!   in a [`Hoard`](crate::config::builder::hoard::Hoard).
+//! - [`Environment`](crate::config::builder::environment::Environment): A
+//!   combination of conditions that can be used to determine where to find
+//!   files in a [`Pile`](crate::config::builder::hoard::Pile).
 
 #![deny(clippy::all)]
 #![deny(clippy::correctness)]

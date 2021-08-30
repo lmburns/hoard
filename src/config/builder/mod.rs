@@ -1,9 +1,11 @@
-//! The [`Builder`] struct serves as an intermediate step between raw configuration and the
-//! [`Config`] type that is used by `hoard`.
-use std::collections::BTreeMap;
-use std::convert::TryInto;
-use std::io;
-use std::path::{Path, PathBuf};
+//! The [`Builder`] struct serves as an intermediate step between raw
+//! configuration and the [`Config`] type that is used by `hoard`.
+use std::{
+    collections::BTreeMap,
+    convert::TryInto,
+    io,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
@@ -12,9 +14,7 @@ use thiserror::Error;
 use self::hoard::Hoard;
 use environment::Environment;
 
-use crate::command::Command;
-use crate::CONFIG_FILE_NAME;
-use crate::HOARDS_DIR_SLUG;
+use crate::{command::Command, CONFIG_FILE_NAME, HOARDS_DIR_SLUG};
 
 use super::Config;
 
@@ -49,17 +49,17 @@ pub struct Builder {
     #[serde(rename = "envs")]
     environments: Option<BTreeMap<String, Environment>>,
     #[structopt(skip)]
-    exclusivity: Option<Vec<Vec<String>>>,
+    exclusivity:  Option<Vec<Vec<String>>>,
     #[structopt(short, long)]
-    hoards_root: Option<PathBuf>,
+    hoards_root:  Option<PathBuf>,
     #[structopt(short, long)]
     #[serde(skip)]
-    config_file: Option<PathBuf>,
+    config_file:  Option<PathBuf>,
     #[serde(skip)]
     #[structopt(subcommand)]
-    command: Option<Command>,
+    command:      Option<Command>,
     #[structopt(skip)]
-    hoards: Option<BTreeMap<String, Hoard>>,
+    hoards:       Option<BTreeMap<String, Hoard>>,
 }
 
 impl Default for Builder {
@@ -89,16 +89,17 @@ impl Builder {
     pub fn new() -> Self {
         tracing::trace!("creating new config builder");
         Self {
-            hoards: None,
-            hoards_root: None,
-            config_file: None,
-            command: None,
+            hoards:       None,
+            hoards_root:  None,
+            config_file:  None,
+            command:      None,
             environments: None,
-            exclusivity: None,
+            exclusivity:  None,
         }
     }
 
-    /// Create a new [`Builder`] pre-populated with the contents of the given TOML file.
+    /// Create a new [`Builder`] pre-populated with the contents of the given
+    /// TOML file.
     ///
     /// # Errors
     ///
@@ -109,8 +110,8 @@ impl Builder {
         toml::from_str(&s).map_err(Error::DeserializeConfig)
     }
 
-    /// Helper method to process command-line arguments and the config file specified on CLI
-    /// (or the default).
+    /// Helper method to process command-line arguments and the config file
+    /// specified on CLI (or the default).
     ///
     /// # Errors
     ///
@@ -137,7 +138,8 @@ impl Builder {
         Ok(from_file.layer(from_args))
     }
 
-    /// Applies all configured values in `other` over those in *this* `ConfigBuilder`.
+    /// Applies all configured values in `other` over those in *this*
+    /// `ConfigBuilder`.
     #[must_use]
     pub fn layer(mut self, other: Self) -> Self {
         let _span = tracing::trace_span!(
@@ -183,8 +185,9 @@ impl Builder {
 
     /// Set the file that contains configuration.
     ///
-    /// This currently only exists for completeness. You probably want [`Builder::from_file`]
-    /// instead, which will actually read and parse the file.
+    /// This currently only exists for completeness. You probably want
+    /// [`Builder::from_file`] instead, which will actually read and parse
+    /// the file.
     #[must_use]
     pub fn set_config_file(mut self, path: PathBuf) -> Self {
         tracing::trace!(
@@ -265,7 +268,8 @@ impl Builder {
     ///
     /// # Errors
     ///
-    /// Any [`enum@Error`] that occurs while evaluating environment or hoard definitions.
+    /// Any [`enum@Error`] that occurs while evaluating environment or hoard
+    /// definitions.
     pub fn build(self) -> Result<Config, Error> {
         tracing::debug!("building configuration from builder");
         let environments = self.evaluated_environments()?;
@@ -308,25 +312,25 @@ mod tests {
 
         fn get_default_populated_builder() -> Builder {
             Builder {
-                hoards_root: Some(Builder::default_hoard_root()),
-                config_file: Some(Builder::default_config_file()),
-                command: Some(Command::Validate),
+                hoards_root:  Some(Builder::default_hoard_root()),
+                config_file:  Some(Builder::default_config_file()),
+                command:      Some(Command::Validate),
                 environments: None,
-                exclusivity: None,
-                hoards: None,
+                exclusivity:  None,
+                hoards:       None,
             }
         }
 
         fn get_non_default_populated_builder() -> Builder {
             Builder {
-                hoards_root: Some(PathBuf::from("/testing/saves")),
-                config_file: Some(PathBuf::from("/testing/config.toml")),
-                command: Some(Command::Restore {
+                hoards_root:  Some(PathBuf::from("/testing/saves")),
+                config_file:  Some(PathBuf::from("/testing/config.toml")),
+                command:      Some(Command::Restore {
                     hoards: vec!["test".into()],
                 }),
                 environments: None,
-                exclusivity: None,
-                hoards: None,
+                exclusivity:  None,
+                hoards:       None,
             }
         }
 
@@ -338,12 +342,12 @@ mod tests {
         #[test]
         fn new_builder_is_all_none() {
             let expected = Builder {
-                hoards_root: None,
-                config_file: None,
-                command: None,
+                hoards_root:  None,
+                config_file:  None,
+                command:      None,
                 environments: None,
-                hoards: None,
-                exclusivity: None,
+                hoards:       None,
+                exclusivity:  None,
             };
 
             assert_eq!(

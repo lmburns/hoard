@@ -23,7 +23,7 @@
 [hoards]
 [hoards.zsh]
     [hoards.zsh.git_token]
-        "zsh|macos" = "~/.config/zsh/zsh.d/git-token.zsh"
+        "zsh|macos" = "$HOME/.config/zsh/zsh.d/git-token.zsh"
     # [hoards.zsh.bindings]
     #     "zsh|macos" = "/Users/lucasburns/.config/zsh/zsh.d/keybindings.zsh"
     # [hoards.zsh.aliases]

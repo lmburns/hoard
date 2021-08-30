@@ -1,6 +1,6 @@
-//! A `Combinator` provides a *newtype* to parse a two-dimensional list of items as a collection of
-//! AND-ed and OR-ed elements. Every item in the outer list is OR-ed, while every item in an inner list
-//! is AND-ed. That is, for
+//! A `Combinator` provides a *newtype* to parse a two-dimensional list of items
+//! as a collection of AND-ed and OR-ed elements. Every item in the outer list
+//! is OR-ed, while every item in an inner list is AND-ed. That is, for
 //!
 //! ```ignore
 //! [ foo, bar, [baz, quux]]
@@ -8,18 +8,20 @@
 //!
 //! The list will be parsed as `foo OR bar OR (baz AND quux)`.
 //!
-//! All AND/OR combinations must be expressed in this fashion. For example, to get `foo AND bar`,
-//! you want `[[foo, bar]]`.
+//! All AND/OR combinations must be expressed in this fashion. For example, to
+//! get `foo AND bar`, you want `[[foo, bar]]`.
 //!
-//! It also implements `serde::Serialize` and `serde::Deserialize` for innermost types that implement
-//! `Into<bool>` and the appropriate serde impl. No optimizations are applied to make later
-//! evaluations easier.
+//! It also implements `serde::Serialize` and `serde::Deserialize` for innermost
+//! types that implement `Into<bool>` and the appropriate serde impl. No
+//! optimizations are applied to make later evaluations easier.
 
 use core::fmt;
 use serde::{Deserialize, Serialize};
-use std::convert::{TryFrom, TryInto};
-use std::error::Error;
-use std::fmt::Formatter;
+use std::{
+    convert::{TryFrom, TryInto},
+    error::Error,
+    fmt::Formatter,
+};
 
 /// An internal container for the [`Combinator<T>`] type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
@@ -29,7 +31,8 @@ pub enum Inner<T: TryInto<bool>> {
     Single(T),
     /// Multiple items that can be converted to booleans.
     ///
-    /// When the [`Inner<T>`] is evaluated, all of the booleans are AND-ed together.
+    /// When the [`Inner<T>`] is evaluated, all of the booleans are AND-ed
+    /// together.
     Multiple(Vec<T>),
 }
 
@@ -39,8 +42,8 @@ where
 {
     /// Whether this [`Inner<T>`] contains a single item.
     ///
-    /// This can be either an [`Inner<T>::Single`] or an [`Inner<T>::Multiple`] containing
-    /// only one item.
+    /// This can be either an [`Inner<T>::Single`] or an [`Inner<T>::Multiple`]
+    /// containing only one item.
     pub fn is_singleton(&self) -> bool {
         match self {
             Inner::Single(_) => true,
@@ -50,7 +53,8 @@ where
 
     /// Whether this [`Inner<T>`] is empty.
     ///
-    /// This only applies if it is an [`Inner<T>::Multiple`] containing an empty list.
+    /// This only applies if it is an [`Inner<T>::Multiple`] containing an empty
+    /// list.
     pub fn is_empty(&self) -> bool {
         match self {
             Inner::Single(_) => false,
@@ -96,15 +100,15 @@ where
                     None => write!(f, ""),
                     Some(s) => write!(f, "{}", s),
                 }
-            }
+            },
         }
     }
 }
 
 /// A combination of things that can evaluate to `true` or `false`.
 ///
-/// If at least one of the [`Inner<T>`] items evaluates to `true`, then entire `Combinator<T>`
-/// will evaluate to `true`.
+/// If at least one of the [`Inner<T>`] items evaluates to `true`, then entire
+/// `Combinator<T>` will evaluate to `true`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
 #[serde(transparent)]
 pub struct Combinator<T: TryInto<bool>>(pub Vec<Inner<T>>);
@@ -115,8 +119,8 @@ where
 {
     /// Whether the [`Combinator<T>`] is empty.
     ///
-    /// This can be if the list of [`Inner<T>`] is empty or if all of the contained
-    /// [`Inner<T>`] are empty (think a list of empty lists).
+    /// This can be if the list of [`Inner<T>`] is empty or if all of the
+    /// contained [`Inner<T>`] are empty (think a list of empty lists).
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty() || self.0.iter().all(Inner::is_empty)
@@ -124,7 +128,8 @@ where
 
     /// Whether the [`Combinator<T>`] is a singleton.
     ///
-    /// This can be any number of empty [`Inner<T>`] and exactly one that is a singleton.
+    /// This can be any number of empty [`Inner<T>`] and exactly one that is a
+    /// singleton.
     #[must_use]
     pub fn is_singleton(&self) -> bool {
         let mut iter = self.0.iter().filter(|inner| !inner.is_empty());
@@ -136,8 +141,9 @@ where
 
     /// Whether the [`Combinator<T>`] is only OR-ed items.
     ///
-    /// This means the [`Combinator`] has at least two items that are OR-ed together; i.e.,
-    /// it contains two or more [`Inner<T>`] that are all singletons.
+    /// This means the [`Combinator`] has at least two items that are OR-ed
+    /// together; i.e., it contains two or more [`Inner<T>`] that are all
+    /// singletons.
     #[must_use]
     pub fn is_only_or(&self) -> bool {
         !self.is_empty() && !self.is_singleton() && self.0.iter().all(Inner::is_singleton)
@@ -145,8 +151,9 @@ where
 
     /// Whether the [`Combinator<T>`] is only AND-ed items.
     ///
-    /// This means the [`Combinator`] has at least two items that are AND-ed together; i.e.,
-    /// it contains exactly one [`Inner<T>::Multiple`] with at least two items.
+    /// This means the [`Combinator`] has at least two items that are AND-ed
+    /// together; i.e., it contains exactly one [`Inner<T>::Multiple`] with
+    /// at least two items.
     #[must_use]
     pub fn is_only_and(&self) -> bool {
         self.0.len() == 1 && !self.is_empty() && !self.is_singleton()
@@ -154,8 +161,8 @@ where
 
     /// Whether the [`Combinator<T>`] is complex.
     ///
-    /// "Complex" here means that it contains at least three items with some combination of AND
-    /// and OR.
+    /// "Complex" here means that it contains at least three items with some
+    /// combination of AND and OR.
     #[must_use]
     pub fn is_complex(&self) -> bool {
         !(self.is_empty() || self.is_singleton() || self.is_only_and() || self.is_only_or())
@@ -340,10 +347,10 @@ mod tests {
     }
 
     struct TestItem {
-        combinator: Combinator<Tester>,
-        evaluates_to: bool,
+        combinator:        Combinator<Tester>,
+        evaluates_to:      bool,
         expected_bool_str: &'static str,
-        typ: CombinatorType,
+        typ:               CombinatorType,
     }
 
     #[allow(clippy::too_many_lines)]
@@ -351,133 +358,133 @@ mod tests {
         vec![
             // BEGIN: Empty combinators
             TestItem {
-                combinator: Combinator(vec![]),
+                combinator:        Combinator(vec![]),
                 // Empty should evaluate to true
-                evaluates_to: true,
+                evaluates_to:      true,
                 expected_bool_str: "",
-                typ: CombinatorType::Empty,
+                typ:               CombinatorType::Empty,
             },
             // Containing only an empty Inner::Multiple counts as empty
             TestItem {
-                combinator: Combinator(vec![Inner::Multiple(vec![])]),
+                combinator:        Combinator(vec![Inner::Multiple(vec![])]),
                 // Empty should evaluate to true
-                evaluates_to: true,
+                evaluates_to:      true,
                 expected_bool_str: "",
-                typ: CombinatorType::Empty,
+                typ:               CombinatorType::Empty,
             },
             // BEGIN: Singleton
             TestItem {
-                combinator: Combinator(vec![Inner::Single(Tester(true))]),
-                evaluates_to: true,
+                combinator:        Combinator(vec![Inner::Single(Tester(true))]),
+                evaluates_to:      true,
                 expected_bool_str: "true",
-                typ: CombinatorType::Singleton,
+                typ:               CombinatorType::Singleton,
             },
             TestItem {
-                combinator: Combinator(vec![Inner::Single(Tester(false))]),
-                evaluates_to: false,
+                combinator:        Combinator(vec![Inner::Single(Tester(false))]),
+                evaluates_to:      false,
                 expected_bool_str: "false",
-                typ: CombinatorType::Singleton,
+                typ:               CombinatorType::Singleton,
             },
             // Containing a single Inner::Multiple with a single item counts as singleton
             TestItem {
-                combinator: Combinator(vec![Inner::Multiple(vec![Tester(true)])]),
-                evaluates_to: true,
+                combinator:        Combinator(vec![Inner::Multiple(vec![Tester(true)])]),
+                evaluates_to:      true,
                 expected_bool_str: "true",
-                typ: CombinatorType::Singleton,
+                typ:               CombinatorType::Singleton,
             },
             TestItem {
-                combinator: Combinator(vec![Inner::Multiple(vec![Tester(false)])]),
-                evaluates_to: false,
+                combinator:        Combinator(vec![Inner::Multiple(vec![Tester(false)])]),
+                evaluates_to:      false,
                 expected_bool_str: "false",
-                typ: CombinatorType::Singleton,
+                typ:               CombinatorType::Singleton,
             },
             // BEGIN: OnlyOr
             TestItem {
-                combinator: Combinator(vec![
+                combinator:        Combinator(vec![
                     Inner::Single(Tester(true)),
                     Inner::Single(Tester(false)),
                 ]),
-                evaluates_to: true,
+                evaluates_to:      true,
                 expected_bool_str: "true OR false",
-                typ: CombinatorType::OnlyOr,
+                typ:               CombinatorType::OnlyOr,
             },
             TestItem {
-                combinator: Combinator(vec![
+                combinator:        Combinator(vec![
                     Inner::Single(Tester(false)),
                     Inner::Single(Tester(false)),
                 ]),
-                evaluates_to: false,
+                evaluates_to:      false,
                 expected_bool_str: "false OR false",
-                typ: CombinatorType::OnlyOr,
+                typ:               CombinatorType::OnlyOr,
             },
             // Containing Inner::Multiples with only one item in them counts like a Single
             TestItem {
-                combinator: Combinator(vec![
+                combinator:        Combinator(vec![
                     Inner::Single(Tester(false)),
                     Inner::Multiple(vec![Tester(true)]),
                 ]),
-                evaluates_to: true,
+                evaluates_to:      true,
                 expected_bool_str: "false OR true",
-                typ: CombinatorType::OnlyOr,
+                typ:               CombinatorType::OnlyOr,
             },
             TestItem {
-                combinator: Combinator(vec![
+                combinator:        Combinator(vec![
                     Inner::Single(Tester(true)),
                     Inner::Multiple(vec![Tester(false)]),
                 ]),
-                evaluates_to: true,
+                evaluates_to:      true,
                 expected_bool_str: "true OR false",
-                typ: CombinatorType::OnlyOr,
+                typ:               CombinatorType::OnlyOr,
             },
             // BEGIN: OnlyAnd
             TestItem {
-                combinator: Combinator(vec![Inner::Multiple(vec![
+                combinator:        Combinator(vec![Inner::Multiple(vec![
                     Tester(true),
                     Tester(true),
                     Tester(true),
                 ])]),
-                evaluates_to: true,
+                evaluates_to:      true,
                 expected_bool_str: "true AND true AND true",
-                typ: CombinatorType::OnlyAnd,
+                typ:               CombinatorType::OnlyAnd,
             },
             TestItem {
-                combinator: Combinator(vec![Inner::Multiple(vec![
+                combinator:        Combinator(vec![Inner::Multiple(vec![
                     Tester(true),
                     Tester(false),
                     Tester(true),
                 ])]),
-                evaluates_to: false,
+                evaluates_to:      false,
                 expected_bool_str: "true AND false AND true",
-                typ: CombinatorType::OnlyAnd,
+                typ:               CombinatorType::OnlyAnd,
             },
             // BEGIN: Complex
             TestItem {
-                combinator: Combinator(vec![
+                combinator:        Combinator(vec![
                     Inner::Single(Tester(true)),
                     Inner::Multiple(vec![Tester(true), Tester(false)]),
                 ]),
-                evaluates_to: true,
+                evaluates_to:      true,
                 expected_bool_str: "true OR (true AND false)",
-                typ: CombinatorType::Complex,
+                typ:               CombinatorType::Complex,
             },
             TestItem {
-                combinator: Combinator(vec![
+                combinator:        Combinator(vec![
                     Inner::Single(Tester(false)),
                     Inner::Multiple(vec![Tester(true), Tester(false)]),
                 ]),
-                evaluates_to: false,
+                evaluates_to:      false,
                 expected_bool_str: "false OR (true AND false)",
-                typ: CombinatorType::Complex,
+                typ:               CombinatorType::Complex,
             },
             TestItem {
-                combinator: Combinator(vec![
+                combinator:        Combinator(vec![
                     Inner::Single(Tester(false)),
                     Inner::Multiple(vec![Tester(true), Tester(false), Tester(false)]),
                     Inner::Single(Tester(false)),
                 ]),
-                evaluates_to: false,
+                evaluates_to:      false,
                 expected_bool_str: "false OR (true AND false AND false) OR false",
-                typ: CombinatorType::Complex,
+                typ:               CombinatorType::Complex,
             },
         ]
     });

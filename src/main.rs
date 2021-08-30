@@ -1,10 +1,13 @@
 use hoard::Config;
 use std::io::Stdout;
-use tracing::level_filters::LevelFilter;
-use tracing::Level;
-use tracing_subscriber::fmt::format::{Format, Pretty};
-use tracing_subscriber::fmt::SubscriberBuilder;
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tracing::{level_filters::LevelFilter, Level};
+use tracing_subscriber::{
+    fmt::{
+        format::{Format, Pretty},
+        SubscriberBuilder,
+    },
+    EnvFilter, FmtSubscriber,
+};
 
 const LOG_ENV: &str = "HOARD_LOG";
 

@@ -1,14 +1,13 @@
 //! See [`ExeExists`].
 
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
-use std::fmt;
-use std::fmt::Formatter;
+use std::{convert::TryInto, fmt, fmt::Formatter};
 
-/// A conditional structure that tests if the given executable exists in the `$PATH` environment
-/// variable.
+/// A conditional structure that tests if the given executable exists in the
+/// `$PATH` environment variable.
 ///
-/// See the documentation for [`which`] for more information on how detection works.
+/// See the documentation for [`which`] for more information on how detection
+/// works.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Hash)]
 #[serde(transparent)]
 #[allow(clippy::module_name_repetitions)]

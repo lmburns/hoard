@@ -4,13 +4,13 @@
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::env;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 // Following the example of `std::env::set_var`, the only things disallowed are
 // the equals sign and the NUL character.
 //
-// The `+?` is non-greedy matching, which is necessary for if there are multiple variables.
+// The `+?` is non-greedy matching, which is necessary for if there are multiple
+// variables.
 static ENV_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"\$\{[^(=|\x{0}|$)]+?}"#).expect("failed to compile regular expression")
 });
@@ -26,14 +26,14 @@ static ENV_REGEX: Lazy<Regex> = Lazy::new(|| {
 ///
 /// let template = "/some/${CUSTOM_VAR}/path";
 /// std::env::set_var("CUSTOM_VAR", "foobar");
-/// let path = expand_env_in_path(template)
-///     .expect("failed to expand path");
+/// let path = expand_env_in_path(template).expect("failed to expand path");
 /// assert_eq!(path, PathBuf::from("/some/foobar/path"));
 /// ```
 ///
 /// # Errors
 ///
-/// - Any [`VarError`](env::VarError) from looking up the environment variable's value.
+/// - Any [`VarError`](env::VarError) from looking up the environment variable's
+///   value.
 pub fn expand_env_in_path(path: &str) -> Result<PathBuf, env::VarError> {
     let mut new_path = path.to_owned();
     let mut start: usize = 0;
@@ -75,7 +75,15 @@ mod tests {
     use super::*;
 
     macro_rules! test_env {
-        (name: $name:ident, input: $input:literal, env: $var:literal, value: $value:literal, expected: $expected:expr, require_var: $require_var:literal) => {
+        (
+            name:
+            $name:ident,input:
+            $input:literal,env:
+            $var:literal,value:
+            $value:literal,expected:
+            $expected:expr,require_var:
+            $require_var:literal
+        ) => {
             #[test]
             #[serial_test::serial]
             fn $name() {
@@ -89,8 +97,22 @@ mod tests {
                 assert_eq!(result, expected);
             }
         };
-        (name: $name:ident, input: $input:literal, env: $var:literal, value: $value:literal, expected: $expected:expr) => {
-            test_env!{ name: $name, input: $input, env: $var, value: $value, expected: $expected, require_var: true }
+        (
+            name:
+            $name:ident,input:
+            $input:literal,env:
+            $var:literal,value:
+            $value:literal,expected:
+            $expected:expr
+        ) => {
+            test_env! {
+                name: $name,
+                input: $input,
+                env: $var,
+                value: $value,
+                expected: $expected,
+                require_var: true
+            }
         };
     }
 
