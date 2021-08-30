@@ -6,6 +6,8 @@ pub use super::builder::hoard::Config;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use std::borrow::Cow;
+use shellexpand::LookupError;
 use thiserror::Error;
 
 /// Errors that can happen while backing up or restoring a hoard.
@@ -75,6 +77,21 @@ impl Pile {
             destination = ?dest
         )
         .entered();
+
+        let expanded = shellexpand::full(&src.display().to_string())
+            .unwrap_or_else(|_| {
+                Cow::from(
+                    LookupError {
+                        var_name: "Unknown environment variable".into(),
+                        cause:    std::env::VarError::NotPresent,
+                    }
+                    .to_string()
+                )
+            })
+            .to_string();
+
+        #[allow(clippy::shadow_unrelated)]
+        let src = Path::new(&expanded);
 
         // Fail if src and dest exist but are not both file or directory.
         if src.exists() == dest.exists()

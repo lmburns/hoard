@@ -143,3 +143,5 @@ exclusivity = [
 
 [hoards.vorta]
     "linux" = "/home/shadow53/.local/share/Vorta/settings.db"
+
+- vim: ft=toml:et:sw=4:ts=2:sts=-1:fdm=marker:fmr={{{,}}}:

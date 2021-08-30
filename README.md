@@ -1,5 +1,10 @@
 # Hoard
 
+# TODO
+* Expand '~' and any variables
+* Add option to ignore directories
+* Execute command like `homemaker`?
+
 `hoard` is a program for backing up files from across a filesystem into a single directory
 and restoring them later.
 
