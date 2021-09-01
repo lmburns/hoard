@@ -141,7 +141,6 @@ impl Pile {
                     let _span = tracing::trace_span!("is_directory").entered();
                 } else if file_type.is_file() {
                     let dest = &dest.join(src.file_name());
-                    println!("DEST aFTER: {}", dest.display());
                     let _span = tracing::trace_span!("is_file").entered();
                     if let Some(parent) = dest.parent() {
                         tracing::trace!(

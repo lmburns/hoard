@@ -3,10 +3,11 @@
 use std::{
     collections::HashMap,
     convert::TryInto,
-    io,
+    env, io,
     path::{Path, PathBuf},
 };
 
+use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use thiserror::Error;
@@ -75,13 +76,45 @@ impl Builder {
     /// Returns the default path for the configuration file.
     fn default_config_file() -> PathBuf {
         tracing::debug!("getting default configuration file");
-        super::get_dirs().config_dir().join(CONFIG_FILE_NAME)
+
+        if env::consts::OS == "macos" {
+            // #[cfg(target_os = "macos")]
+            env::var_os("XDG_CONFIG_HOME")
+                .map(PathBuf::from)
+                .filter(|p| p.is_absolute())
+                .or_else(|| {
+                    BaseDirs::new()
+                        .map(|p| p.home_dir().to_owned())
+                        .map(|p| p.join(".config"))
+                })
+                .expect("Invalid local data directory")
+                .join(CONFIG_FILE_NAME)
+        } else {
+            // #[cfg(not(target_os = "macos"))]
+            super::get_dirs().config_dir().join(CONFIG_FILE_NAME)
+        }
     }
 
     /// Returns the default location for storing hoards.
     fn default_hoard_root() -> PathBuf {
         tracing::debug!("getting default hoard root");
-        super::get_dirs().data_dir().join(HOARDS_DIR_SLUG)
+
+        if env::consts::OS == "macos" {
+            // #[cfg(target_os = "macos")]
+            env::var_os("XDG_DATA_HOME")
+                .map(PathBuf::from)
+                .filter(|p| p.is_absolute())
+                .or_else(|| {
+                    BaseDirs::new()
+                        .map(|p| p.home_dir().to_owned())
+                        .map(|p| p.join(".local").join("share"))
+                })
+                .expect("Invalid local data directory")
+                .join(HOARDS_DIR_SLUG)
+        } else {
+            // #[cfg(not(target_os = "macos"))]
+            super::get_dirs().data_dir().join(HOARDS_DIR_SLUG)
+        }
     }
 
     /// Create a new `Builder`.

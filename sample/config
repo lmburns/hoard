@@ -1,9 +1,7 @@
-[config]
-[]
 [envs]
 [envs.zsh]
     exe_exists = ["zsh"]
-    path_exists = ["${HOME}/.config/zsh"]
+    # path_exists = ["${HOME}/.config/zsh"]
 
 [envs.um]
     exe_exists = ["um"]
@@ -37,7 +35,7 @@
 
 [hoards.test]
     [hoards.test.lmao]
-        "macos|um" = "${HOME}/test/lmao"
+        "macos|um" = "/Users/lucasburns/test/lmao"
     # [hoards.um.pages]
     #     "macos|um" = "${XDG_CONFIG_HOME}/um/pages"
     # [hoards.um.conf]
