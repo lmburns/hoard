@@ -74,7 +74,7 @@ pub mod config;
 pub mod env_vars;
 
 /// The default file name of the configuration file.
-pub const CONFIG_FILE_NAME: &str = "config.toml";
+pub const CONFIG_FILE_NAME: &str = "config.yml";
 
 /// The name of the directory containing the backed up hoards.
 pub const HOARDS_DIR_SLUG: &str = "hoards";

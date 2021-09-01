@@ -29,6 +29,9 @@ pub enum Error {
     /// Error while parsing a TOML configuration file.
     #[error("failed to parse configuration file: {0}")]
     DeserializeConfig(toml::de::Error),
+    /// Error while parsing a YAML configuration file.
+    #[error("failed to parse configuration file: {0}")]
+    DeserializeYamlConfig(serde_yaml::Error),
     /// Error while reading from a configuration file.
     #[error("failed to read configuration file: {0}")]
     ReadConfig(io::Error),
@@ -147,6 +150,19 @@ impl Builder {
         toml::from_str(&s).map_err(Error::DeserializeConfig)
     }
 
+    /// Create a new [`Builder`] pre-populated with the contents of the given
+    /// YAML file.
+    ///
+    /// # Errors
+    ///
+    /// Variants of [`enum@Error`] related to reading and parsing the file.
+    #[allow(unused)]
+    pub fn from_file_yaml(path: &Path) -> Result<Self, Error> {
+        tracing::debug!("reading configuration from \"{}\"", path.to_string_lossy());
+        let s = std::fs::read_to_string(path).map_err(Error::ReadConfig)?;
+        serde_yaml::from_str(&s).map_err(Error::DeserializeYamlConfig)
+    }
+
     /// Helper method to process command-line arguments and the config file
     /// specified on CLI (or the default).
     ///
@@ -169,7 +185,17 @@ impl Builder {
             config_file.to_string_lossy()
         );
 
-        let from_file = Self::from_file(&config_file)?;
+        let from_file = if let Some(ext) = config_file.extension() {
+            if ext == "yaml" || ext == "yml" {
+                Self::from_file_yaml(&config_file)?
+            } else {
+                Self::from_file(&config_file)?
+            }
+        } else {
+            Self::from_file(&config_file)?
+        };
+
+        // let from_file = ;
 
         tracing::debug!("merging configuration file and cli arguments");
         Ok(from_file.layer(from_args))

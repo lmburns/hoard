@@ -114,6 +114,7 @@ impl Config {
         let config = Builder::from_args_then_file()
             .map(Builder::build)?
             .map_err(Error::Builder)?;
+        println!("SELF CONFIG: {:#?}", config);
         tracing::info!("loaded configuration.");
         Ok(config)
     }

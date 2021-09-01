@@ -62,11 +62,49 @@ pub enum Encryption {
     Asymmetric(AsymmetricEncryption),
 }
 
+/// Configuration for hoard/pile walker.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "walker", rename_all = "snake_case", default)]
+pub struct Walker {
+    /// Follow symlinks
+    pub follow_links:   bool,
+    /// Collect hidden files
+    pub hidden:         bool,
+    /// Max depth to go
+    pub max_depth:      Option<usize>,
+    /// File patterns to ignore
+    pub exclude:        Vec<String>,
+    /// File patterns to include
+    pub pattern:        String,
+    /// Whether the pattern is to be parsed as a regex instead of a glob
+    pub regex:          bool,
+    /// To be case sensitive or not
+    pub case_sensitive: bool,
+}
+
+impl Default for Walker {
+    fn default() -> Self {
+        Self {
+            follow_links:   false,
+            hidden:         true,
+            max_depth:      None,
+            exclude:        vec![],
+            pattern:        "*".to_string(),
+            regex:          false,
+            case_sensitive: false,
+        }
+    }
+}
+
 /// Hoard/Pile configuration.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
+    /// Encryption configuration options
+    pub encryption: Option<Encryption>,
     #[serde(flatten)]
-    encryption: Encryption,
+    /// WalkBuilder configuration options
+    pub walker:     Walker,
 }
 
 /// A single pile in the hoard.
@@ -89,7 +127,7 @@ impl Pile {
         )
         .entered();
 
-        println!("SELF: {:#?}", self);
+        println!("USING SINGLE SELF: {:#?}", self);
         let Pile { config, items } = self;
         let trie = EnvTrie::new(&items, exclusivity)?;
         let path = trie.get_path(envs)?.map(expand_env_in_path).transpose()?;
@@ -112,6 +150,7 @@ impl MultipleEntries {
         envs: &HashMap<String, bool>,
         exclusivity: &[Vec<String>],
     ) -> Result<ConfigMultiple, Error> {
+        println!("USING MULTIPLE SELF: {:#?}", self);
         let MultipleEntries { config, items } = self;
         let items = items
             .into_iter()
@@ -231,9 +270,10 @@ mod tests {
         fn single_entry_with_config() {
             let hoard = Hoard::Single(Pile {
                 config: Some(Config {
-                    encryption: Encryption::Asymmetric(AsymmetricEncryption {
+                    encryption: Some(Encryption::Asymmetric(AsymmetricEncryption {
                         public_key: "public key".to_string(),
-                    }),
+                    })),
+                    walker:     Walker::default(),
                 }),
                 items:  hashmap! {
                     "bar_env|foo_env".to_string() => "/some/path".to_string()
@@ -289,9 +329,10 @@ mod tests {
         fn multiple_entry_with_config() {
             let hoard = Hoard::Multiple(MultipleEntries {
                 config: Some(Config {
-                    encryption: Encryption::Symmetric(SymmetricEncryption::Password(
+                    encryption: Some(Encryption::Symmetric(SymmetricEncryption::Password(
                         "correcthorsebatterystaple".into(),
-                    )),
+                    ))),
+                    walker:     Walker::default(),
                 }),
                 items:  hashmap! {
                     "item1".to_string() => Pile {
@@ -303,23 +344,47 @@ mod tests {
                 },
             });
 
+            #[rustfmt::skip]
             assert_tokens(&hoard, &[
                 Token::Map { len: None },
-                Token::Str("config"),
-                Token::Some,
-                Token::Map { len: None },
-                Token::Str("encrypt"),
-                Token::Str("symmetric"),
-                Token::Str("encrypt_pass"),
-                Token::Str("correcthorsebatterystaple"),
-                Token::MapEnd,
-                Token::Str("item1"),
-                Token::Map { len: None },
-                Token::Str("config"),
-                Token::None,
-                Token::Str("bar_env|foo_env"),
-                Token::Str("/some/path"),
-                Token::MapEnd,
+                    Token::Str("config"),
+                    Token::Some,
+                    Token::Map { len: None },
+                        Token::Str("encryption"),
+                        Token::Some,
+                        Token::Map { len: Some(2) },
+                            Token::Str("encrypt"),
+                            Token::Str("symmetric"),
+                            Token::Str("encrypt_pass"),
+                            Token::Str("correcthorsebatterystaple"),
+                        Token::MapEnd,
+
+                        Token::Str("walker"),
+                        Token::Str("Walker"),
+                            Token::Str("follow_links"),
+                            Token::Bool(false),
+                            Token::Str("hidden"),
+                            Token::Bool(true),
+                            Token::Str("max_depth"),
+                            Token::None,
+                            Token::Str("exclude"),
+                            Token::Seq { len: Some(0) },
+                            Token::SeqEnd,
+                            Token::Str("pattern"),
+                            Token::String("*"),
+                            Token::Str("regex"),
+                            Token::Bool(false),
+                            Token::Str("case_sensitive"),
+                            Token::Bool(false),
+                    Token::MapEnd,
+
+                    Token::Str("item1"),
+                    Token::Map { len: None },
+                        Token::Str("config"),
+                        Token::None,
+                        Token::Str("bar_env|foo_env"),
+                        Token::Str("/some/path"),
+                    Token::MapEnd,
                 Token::MapEnd,
             ]);
         }

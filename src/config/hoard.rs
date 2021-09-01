@@ -4,15 +4,36 @@
 
 pub use super::builder::hoard::Config;
 use crate::checkers::history::last_paths::HoardPaths;
+use colored::Colorize;
 use crossbeam_channel as channel;
-use ignore::{WalkBuilder, WalkState};
+use ignore::{overrides::OverrideBuilder, WalkBuilder, WalkState};
+use once_cell::sync::Lazy;
+use regex::bytes::{Regex, RegexBuilder};
 use std::{
+    borrow::Cow,
     collections::HashMap,
+    ffi::{OsStr, OsString},
     fs, io,
     path::{Path, PathBuf},
+    sync::Arc,
     thread,
 };
 use thiserror::Error;
+
+/// Convert search string to bytes
+#[must_use]
+pub fn osstr_to_bytes(input: &OsStr) -> Cow<[u8]> {
+    use std::os::unix::ffi::OsStrExt;
+    Cow::Borrowed(input.as_bytes())
+}
+
+/// Match uppercase characters against Unicode characters as well. Tags can also
+/// be any valid Unicode character
+pub fn contains_upperchar(pattern: &str) -> bool {
+    static UPPER_REG: Lazy<Regex> = Lazy::new(|| Regex::new(r"[[:upper:]]").unwrap());
+    let cow_pat: Cow<OsStr> = Cow::Owned(OsString::from(pattern));
+    UPPER_REG.is_match(&osstr_to_bytes(cow_pat.as_ref()))
+}
 
 /// Errors that can happen while backing up or restoring a hoard.
 #[derive(Debug, Error)]
@@ -58,6 +79,18 @@ pub enum Error {
         /// Destination path.
         dest: PathBuf,
     },
+    /// Unable to add Walker.exclude patterns to OverrideBuilder
+    #[error("failed to parse excluded patterns: {0}")]
+    ExcludeError(String),
+    /// Unable to build OverrideBuilder
+    #[error("failed to build OverrideBuilder: {0}")]
+    OverrideBuildError(String),
+    /// Failure to parse glob pattern
+    #[error("failed to parse glob pattern: {0}")]
+    GlobError(String),
+    /// Failure to parse regex pattern
+    #[error("failed to parse regex pattern: {0}")]
+    RegexError(String),
 }
 
 /// A single path to hoard, with configuration.
@@ -81,6 +114,7 @@ impl Pile {
     /// # Errors
     ///
     /// Various sorts of I/O errors as the different [`Error`] variants.
+    #[allow(clippy::too_many_lines)]
     fn copy(&self, src: &Path, dest: &Path) -> Result<(), Error> {
         let _span = tracing::trace_span!(
             "copy",
@@ -89,22 +123,82 @@ impl Pile {
         )
         .entered();
 
-        println!("CONFIG: {:?}", self.config);
-        println!("PaTH: {:?}", self.path);
+        let threads = num_cpus::get();
+
+        let conf = self.config.clone();
+        let pattern = conf.clone().map_or("*".to_string(), |p| p.walker.pattern);
+        let pattern = if conf.map(|p| p.walker.regex).unwrap() {
+            pattern
+        } else {
+            let builder = globset::GlobBuilder::new(&pattern);
+            builder
+                .build()
+                .map_err(|e| Error::GlobError(e.to_string()))?
+                .regex()
+                .to_owned()
+        };
+
+        let sensitive = self
+            .config
+            .clone()
+            .map(|p| p.walker.case_sensitive)
+            .unwrap()
+            || contains_upperchar(&pattern);
+
+        let compiled_patt = RegexBuilder::new(&pattern)
+            .case_insensitive(!sensitive)
+            .build()
+            .map_err(|e| Error::RegexError(e.to_string()))?;
+
+        let pattern = Arc::new(compiled_patt);
+
+        let mut override_builder = OverrideBuilder::new(src);
+        for ext in &self.config.clone().map_or_else(Vec::new, |p| {
+            p.walker
+                .exclude
+                .iter()
+                .map(|v| String::from("!") + v.as_str())
+                .collect()
+        }) {
+            override_builder
+                .add(ext.as_str())
+                .map_err(|e| Error::ExcludeError(e.to_string()))?;
+        }
 
         let mut builder = WalkBuilder::new(src);
-
         builder
-            .threads(num_cpus::get())
-            .follow_links(false)
-            .hidden(true)
+            .threads(threads)
+            .follow_links(
+                self.config
+                    .clone()
+                    .map(|p| p.walker.follow_links)
+                    .or(Some(false))
+                    .unwrap(),
+            )
+            .hidden(
+                self.config
+                    .clone()
+                    .map(|p| p.walker.hidden)
+                    .or(Some(true))
+                    .unwrap(),
+            )
+            .max_depth(
+                self.config
+                    .clone()
+                    .map(|p| p.walker.max_depth)
+                    .or(None)
+                    .unwrap(),
+            )
+            .overrides(
+                override_builder
+                    .build()
+                    .map_err(|e| Error::OverrideBuildError(e.to_string()))?,
+            )
             .ignore(false)
             .git_global(false)
             .git_ignore(false)
             .git_exclude(false)
             .parents(false);
-        // .overrides(overrides)
-        // .max_depth(epth);
 
         let walker = builder.build_parallel();
         let (tx, rx) = channel::unbounded::<ignore::DirEntry>();
@@ -112,17 +206,32 @@ impl Pile {
         thread::spawn(|| {
             walker.run(move || {
                 let tx = tx.clone();
+                let pattern = Arc::clone(&pattern);
 
                 Box::new(move |res| {
                     let entry = match res {
                         Ok(d) => d,
                         Err(e) => {
-                            eprintln!("Warning: {}", &e);
+                            eprintln!("{}: {}", "Warning".yellow().bold(), &e);
                             return WalkState::Continue;
                         },
                     };
 
+                    let entry_path = entry.path();
+
+                    // Verify a file name is actually present
+                    let entry_fname: Cow<OsStr> = match entry_path.file_name() {
+                        Some(f) => Cow::Borrowed(f),
+                        _ => unreachable!("Invalid file reached"),
+                    };
+
+                    // Filter out patterns that don't match
+                    if !pattern.is_match(&osstr_to_bytes(entry_fname.as_ref())) {
+                        return WalkState::Continue;
+                    }
+
                     if tx.send(entry).is_err() {
+                        tracing::trace!("WalkBuilder sent quit");
                         return WalkState::Quit;
                     }
                     WalkState::Continue
@@ -130,17 +239,31 @@ impl Pile {
             });
         });
 
+        // for src in rx.iter() {
         while let Ok(src) = rx.recv() {
             tracing::trace!("Walker source: {:?}", src);
-            println!("SOURCE: {}", src.path().display());
             let src_path = src.path();
+
+            println!("DEST BEFORE: {}", dest.display());
+
+            let components = src_path
+                .iter()
+                .rev()
+                .clone()
+                .collect::<Vec<_>>()
+                .drain(0..src.depth())
+                .collect::<Vec<_>>();
+
+            let dest = &mut PathBuf::from(dest);
+
+            for comp in components.iter().rev() {
+                dest.push(comp);
+            }
+
             if let Some(file_type) = src.file_type() {
                 if file_type.is_dir() {
-                    // Nothing to do here
-                    // WalkDir is smart enough to handle directories and files
                     let _span = tracing::trace_span!("is_directory").entered();
                 } else if file_type.is_file() {
-                    let dest = &dest.join(src.file_name());
                     let _span = tracing::trace_span!("is_file").entered();
                     if let Some(parent) = dest.parent() {
                         tracing::trace!(
@@ -159,7 +282,7 @@ impl Pile {
                         "copying",
                     );
 
-                    fs::copy(src_path.to_owned(), dest).map_err(|err| Error::CopyFile {
+                    fs::copy(src_path.to_owned(), &dest).map_err(|err| Error::CopyFile {
                         src:   src_path.to_owned(),
                         dest:  dest.clone(),
                         error: err,
@@ -189,7 +312,6 @@ impl Pile {
     ///
     /// Various sorts of I/O errors as the different [`enum@Error`] variants.
     pub fn backup(&self, prefix: &Path) -> Result<(), Error> {
-        // TODO: do stuff with pile config
         if let Some(path) = &self.path {
             let _span = tracing::debug_span!(
                 "backup_pile",

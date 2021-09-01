@@ -1,10 +1,63 @@
 # Hoard
 
 # TODO
-* Expand '~' and any variables
-* Expand variables and tildes in env paths
-* Add option to ignore directories
 * Execute command like `homemaker`?
+* Deal with `[[]]` in in `yaml`
+* Work with the encryption
+* Global configuration as well
+
+## Fork
+* Expands both '~' and environment variables in `path_exists` as well as the `hoard`'s file path
+  * Has ability to parse default variable settings that use another variable (i.e., `${ZDOTDIR:-$HOME/.config/zsh}`)
+  * Variables do not need to be surrounded by curly braces unless the default value is given
+* `macOS` configuration directories now respect the `XDG` data structure
+* Ability to use two different file formats: `toml` or `yaml`/`yml`
+  * Depending on the extension of the file that is given using the `-c|--config` parameter will determine which is parsed
+  * If there is no extension on the file then `toml` will be used
+  * Some people may find one or the other easier to read
+* Uses the crate `ignore` when walking directories
+  * This provides many more options that can be given to the user when building directory
+  * Note that not all of the fields need to be filled out, this is just what is available
+  * Checkout `sample` directory for some configurations
+  * These are can be used like the following:
+```toml
+[hoards]
+[hoards.file]
+  [hoards.file.config]
+    "follow_links"   = true
+    "hidden"         = true
+    "max_depth"      = 3
+    "exclude"        = ["*.git*", "*another*"] # This is a pattern like regex, not an ignore pattern
+    "pattern"        = "*.txt"
+    "regex"          = false
+    "case_sensitive" = false
+    [hoards.file.config.encryption]
+      "encrypt"      = "symmetric"
+      "encrypt_pass" = "pass"
+  [hoards.file.named]
+    "env|unix" = "$HOME/test/file"
+```
+
+This is where a `yaml` could be more legible and less verbose
+```yaml
+hoards:
+  file:
+    config:
+      follow_links: true
+      hidden: true
+      max_depth: 3
+      exclude: ["*.git*", "*another*"]
+      pattern: "*.txt"
+      regex: false
+      case_sensitive: false
+      # Being worked on
+      encryption:
+        encrypt: symmetric
+        encrypt_pass: lmao
+    named:
+      env|unix: $HOME/test/file
+```
+* Has a colored help message
 
 `hoard` is a program for backing up files from across a filesystem into a single directory
 and restoring them later.

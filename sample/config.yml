@@ -1,0 +1,32 @@
+envs:
+  zsh:
+    exe_exists:
+      - zsh
+  um:
+    exe_exists:
+      - um
+  macos:
+    os:
+      - macos
+  unix:
+    env:
+      - var: HOME
+      - var: XDG_CONFIG_HOME
+    os:
+      - linux
+      - macos
+      - freebsd
+hoards:
+  test:
+    config:
+      follow_links: true
+      # pattern: "*.txt"
+      # Alternate ways of writing it
+      exclude:
+        - "*john*"
+      # exclude = ["*exclude*"]
+      encryption:
+        encrypt: symmetric
+        encrypt_pass: lmao
+    lmao:
+      macos|um: ${HOME}/test/lmao

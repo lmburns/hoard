@@ -176,6 +176,16 @@ where
     pub fn to_toml_string(&self) -> Result<String, toml::ser::Error> {
         toml::to_string(&self)
     }
+
+    /// Convert this [`Combinator<T>`] to YAML.
+    ///
+    /// # Errors
+    ///
+    /// Any errors during the serialization process ([`serde_yaml::Error`]).
+    #[allow(unused)]
+    pub fn to_yaml_string(&self) -> Result<String, serde_yaml::Error> {
+        serde_yaml::to_string(&self)
+    }
 }
 
 impl<T> fmt::Display for Combinator<T>

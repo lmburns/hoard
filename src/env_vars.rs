@@ -54,11 +54,11 @@ impl std::error::Error for Error {
 /// ```
 ///
 /// # Errors
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::too_many_lines)]
-/// 
+///
 /// - Any [`VarError`](env::VarError) from looking up the environment variable's
 ///   value.
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::too_many_lines)]
 pub fn expand_env_in_path(path: &str) -> Result<PathBuf, Error> {
     let new_path = path.to_owned();
     let _span = tracing::debug_span!("expand_env_in_path", %path).entered();

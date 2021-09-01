@@ -1,0 +1,45 @@
+envs:
+  zsh:
+    exe_exists:
+      - zsh
+  um:
+    exe_exists:
+      - um
+  macos:
+    os:
+      - macos
+  unix:
+    env:
+      - var: HOME
+      - var: XDG_CONFIG_HOME
+    os:
+      - linux
+      - macos
+      - freebsd
+hoards:
+  hoard_main:
+    # Config is a reserved word in hoards
+    config:
+      # Whether or not to follow symlinks
+      follow_links: true
+      # Whether or not to skip hidden files
+      hidden: true
+      # Pattern of files to only include
+      pattern: "*.txt"
+      # Whether the pattern is to be interpreted as a regex or a glob
+      regex: true
+      # Max depth to traverse
+      max_depth: 2
+      # Whether the pattern should be case sensitive or not
+      case_sensitive: false
+      # Alternate ways of writing it
+      exclude:
+        - "*john*"
+      # exclude = ["*exclude*"]
+
+      # Is being worked on
+      encryption:
+        encrypt: symmetric
+        encrypt_pass: lmao
+    hoard_sub:
+      macos|um: ${HOME}/test/lmao
