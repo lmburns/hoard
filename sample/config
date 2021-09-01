@@ -1,7 +1,17 @@
+[config]
+[]
 [envs]
 [envs.zsh]
     exe_exists = ["zsh"]
     path_exists = ["${HOME}/.config/zsh"]
+
+[envs.um]
+    exe_exists = ["um"]
+  # # or / [[]] = and
+    # path_exists = [
+    #    "/Users/lucasburns/.config/um",
+    #    "/Users/lucasburns/.um"
+    # ]
 
 [envs.macos]
     os = ["macos"]
@@ -21,12 +31,21 @@
 #     "zsh|macos" = "/Users/lucasburns/.config/zsh/themes"
 
 [hoards]
-[hoards.zsh]
-    [hoards.zsh.git_token]
-        "zsh|macos" = "$ZDOTDIR/zsh.d/git-token.zsh"
-    [hoards.zsh.bindings]
-        "zsh|macos" = "~/.config/zsh/zsh.d/keybindings.zsh"
-    [hoards.zsh.aliases]
-        "zsh|macos" = "${ZDOTDIR}/zsh.d/aliases.zsh"
+# [hoards.zsh]
+#     [hoards.zsh.aliases]
+#         "zsh|macos" = "${ASDF:-$ZDOTDIR}/zsh.d/aliases.zsh"
+
+[hoards.test]
+    [hoards.test.lmao]
+        "macos|um" = "${HOME}/test/lmao"
+    # [hoards.um.pages]
+    #     "macos|um" = "${XDG_CONFIG_HOME}/um/pages"
+    # [hoards.um.conf]
+    #     "macos|um" = "${XDG_CONFIG_HOME}/um/umconfig"
+
+# [hoards.zsh.git_token]
+#     "zsh|macos" = "$ZDOTDIR/zsh.d/git-token.zsh"
+# [hoards.zsh.bindings]
+#     "zsh|macos" = "~/.config/zsh/zsh.d/keybindings.zsh"
 
 # vim: ft=toml:et:sw=0:ts=4:sts=4:fdm=marker:fmr={{{,}}}:

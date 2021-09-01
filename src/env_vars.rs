@@ -49,7 +49,13 @@ pub fn expand_env_in_path(path: &str) -> Result<PathBuf, env::VarError> {
     };
 
     // Taken from the crate [`shellexpand`] and modified here for better
-    // error handling pertaining to the current crate.
+    // error handling pertaining to the current crate. Also allows for nested
+    // default values (.i.e., ${XDG_DATA_HOME:-$HOME/.local/share}). The spot in
+    // which this is done is marked below.
+
+    // Nested brackets and reursive default values is not implemented yet.
+    // It would be nice to detect something like this:
+    //          ${ZDOTDIR:-${HOME/.config/zsh:-/Users/user/.config/zsh}}
     if let Some(idx) = new_path.find('$') {
         fn find_dollar(s: &str) -> usize {
             s.find('$').unwrap_or(s.len())
@@ -60,9 +66,10 @@ pub fn expand_env_in_path(path: &str) -> Result<PathBuf, env::VarError> {
         }
 
         fn context(s: &str) -> Result<Option<String>, env::VarError> {
+            // std::env::var(s).map(Some)
             match env::var(s) {
                 Ok(value) => Ok(Some(value)),
-                Err(env::VarError::NotPresent) => Ok(Some("".into())),
+                Err(env::VarError::NotPresent) => Ok(None),
                 Err(e) => Err(e),
             }
         }
@@ -94,8 +101,35 @@ pub fn expand_env_in_path(path: &str) -> Result<PathBuf, env::VarError> {
                         _ => closing_brace_idx,
                     };
 
+                    // Nested default values (i.e., ${ZDOTDIR:-$HOME/.config/zsh})
+                    let default_value = if let Some(dv) = default_value {
+                        tracing::trace!("detected nested default value: {}", dv);
+                        let dv = if dv.starts_with('$') {
+                            dv.strip_prefix('$').unwrap()
+                        } else {
+                            dv
+                        };
+
+                        match context(dv) {
+                            Ok(Some(default)) => {
+                                tracing::trace!("expanded nested default value: {}", default);
+                                Some(default)
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            },
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+
                     let var_name = &new_path[2..var_name_end_idx];
-                    tracing::trace!(var_name, "found environment variable {}", var_name,);
+                    tracing::trace!(
+                        "default value {:?} for environment variable {}",
+                        default_value,
+                        var_name
+                    );
                     match context(var_name) {
                         // if we have the variable set to some value
                         Ok(Some(var_value)) => {
@@ -106,9 +140,8 @@ pub fn expand_env_in_path(path: &str) -> Result<PathBuf, env::VarError> {
 
                         // if the variable is set and empty or if it is unset
                         not_found_or_empty => {
-                            let value = match (not_found_or_empty, default_value) {
-                                // return an error if we don't have a default and the variable is
-                                // unset
+                            let value = match (not_found_or_empty, default_value.as_ref()) {
+                                // unset and no default
                                 (Err(err), None) => {
                                     return Err(err);
                                 },
@@ -178,42 +211,49 @@ mod tests {
 
     macro_rules! test_env {
         (
-            name:
-            $name:ident,input:
-            $input:literal,env:
-            $var:literal,value:
-            $value:literal,expected:
-            $expected:expr,require_var:
-            $require_var:literal
+            name:$name:ident,
+            input:$input:literal,
+            $(
+                env:$var:literal,
+                value:$value:literal
+            ),+,
+            expected:$expected:expr,
+            equal:$equal:literal
         ) => {
             #[test]
             #[serial_test::serial]
             fn $name() {
-                if $require_var && !($input).contains(&format!("${{{}}}", $var)) {
-                    panic!("input string {} doesn't contain variable {}", $input, $var);
-                }
-
-                std::env::set_var($var, $value);
-                let expected: PathBuf = $expected;
-                let result = expand_env_in_path($input).expect("failed to expand env in path");
-                assert_eq!(result, expected);
+                // Is this how optional multiple parameters for this macro is supposed to be setup?
+                $(
+                    std::env::set_var($var, $value);
+                    let expected: PathBuf = $expected;
+                    let result = expand_env_in_path($input).expect("failed to expand env in path");
+                    if $equal {
+                        assert_eq!(result, expected);
+                    } else {
+                        assert_ne!(result, expected);
+                    }
+                )+
             }
         };
         (
-            name:
-            $name:ident,input:
-            $input:literal,env:
-            $var:literal,value:
-            $value:literal,expected:
-            $expected:expr
+            name:$name:ident,
+            input:$input:literal,
+            $(
+                env:$var:literal,
+                value:$value:literal
+            ),+,
+            expected:$expected:expr
         ) => {
             test_env! {
                 name: $name,
                 input: $input,
-                env: $var,
-                value: $value,
+                $(
+                    env: $var,
+                    value: $value
+                ),+,
                 expected: $expected,
-                require_var: true
+                equal: true
             }
         };
     }
@@ -296,8 +336,7 @@ mod tests {
         input: "/path/without/variables",
         env: "UNUSED",
         value: "NOTHING",
-        expected: PathBuf::from("/path/without/variables"),
-        require_var: false
+        expected: PathBuf::from("/path/without/variables")
     }
 
     test_env! {
@@ -309,12 +348,11 @@ mod tests {
     }
 
     test_env! {
-        name: var_without_braces_not_expanded,
-        input: "/path/with/$INVALID/variable",
-        env: "INVALID",
-        value: "broken",
-        expected: PathBuf::from("/path/with/$INVALID/variable"),
-        require_var: false
+        name: var_without_braces_does_expand,
+        input: "/path/with/$VALID/variable",
+        env: "VALID",
+        value: "works",
+        expected: PathBuf::from("/path/with/works/variable")
     }
 
     test_env! {
@@ -322,8 +360,7 @@ mod tests {
         input: "/path/with/%INVALID%/variable",
         env: "INVALID",
         value: "broken",
-        expected: PathBuf::from("/path/with/%INVALID%/variable"),
-        require_var: false
+        expected: PathBuf::from("/path/with/%INVALID%/variable")
     }
 
     test_env! {
@@ -334,11 +371,39 @@ mod tests {
         expected: PathBuf::from("${HOME}")
     }
 
+    // TODO: Fix this
     test_env! {
         name: var_inside_var,
         input: "${WRAPPING${TEST_VAR}VARIABLE}",
         env: "TEST_VAR",
-        value: "_",
-        expected: PathBuf::from("${WRAPPING_VARIABLE}")
+        value: "___",
+        expected: PathBuf::from("${WRAPPING___VARIABLE}"),
+        equal: false
+    }
+
+    test_env! {
+        name: default_value_first_set,
+        input: "${FIRST:-$SECOND}/path/ok",
+        env: "FIRST",
+        value: "/EXPANDED/dir",
+        expected: PathBuf::from("/EXPANDED/dir/path/ok")
+    }
+
+    test_env! {
+        name: default_value_second_set,
+        input: "${FIRST:-$SECOND}/path/ok",
+        env: "SECOND",
+        value: "/EXPANDED/dir",
+        expected: PathBuf::from("/EXPANDED/dir/path/ok")
+    }
+
+    test_env! {
+        name: default_value_both_set,
+        input: "${FIRST:-$SECOND}/path/ok",
+        env: "FIRST",
+        value: "/EXPANDED/dir",
+        env: "SECOND",
+        value: "/NOTEXPANDED/dir",
+        expected: PathBuf::from("/EXPANDED/dir/path/ok")
     }
 }

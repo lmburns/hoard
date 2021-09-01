@@ -29,8 +29,6 @@ impl TryInto<bool> for PathExists {
             error: err,
         });
 
-        println!("===============HERE=============");
-
         match path_expand {
             Ok(path) => {
                 tracing::trace!("checking if path \"{}\" exists", path.to_string_lossy());

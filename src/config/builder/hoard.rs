@@ -95,6 +95,7 @@ impl Pile {
         )
         .entered();
 
+        println!("SELF: {:#?}", self);
         let Pile { config, items } = self;
         let items = items
             .into_iter()

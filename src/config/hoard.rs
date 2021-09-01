@@ -3,10 +3,13 @@
 //! builder `Hoard`s for more details.
 
 pub use super::builder::hoard::Config;
+use crossbeam_channel as channel;
+use ignore::{WalkBuilder, WalkState};
 use std::{
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
+    thread,
 };
 use thiserror::Error;
 
@@ -75,7 +78,7 @@ impl Pile {
     /// # Errors
     ///
     /// Various sorts of I/O errors as the different [`Error`] variants.
-    fn copy(src: &Path, dest: &Path) -> Result<(), Error> {
+    fn copy(&self, src: &Path, dest: &Path) -> Result<(), Error> {
         let _span = tracing::trace_span!(
             "copy",
             source = ?src,
@@ -83,69 +86,95 @@ impl Pile {
         )
         .entered();
 
-        // Fail if src and dest exist but are not both file or directory.
-        if src.exists() == dest.exists()
-            && src.is_dir() != dest.is_dir()
-            && src.is_file() != dest.is_file()
-        {
-            return Err(Error::TypeMismatch {
-                src:  src.to_owned(),
-                dest: dest.to_owned(),
+        println!("CONFIG: {:?}", self.config);
+        println!("PaTH: {:?}", self.path);
+
+        let mut builder = WalkBuilder::new(src);
+
+        builder
+            .threads(num_cpus::get())
+            .follow_links(false)
+            .hidden(true)
+            .ignore(false)
+            .git_global(false)
+            .git_ignore(false)
+            .git_exclude(false)
+            .parents(false);
+        // .overrides(overrides)
+        // .max_depth(epth);
+
+        let walker = builder.build_parallel();
+        let (tx, rx) = channel::unbounded::<ignore::DirEntry>();
+
+        thread::spawn(|| {
+            walker.run(move || {
+                let tx = tx.clone();
+
+                Box::new(move |res| {
+                    let entry = match res {
+                        Ok(d) => d,
+                        Err(e) => {
+                            eprintln!("Warning: {}", &e);
+                            return WalkState::Continue;
+                        },
+                    };
+
+                    if tx.send(entry).is_err() {
+                        return WalkState::Quit;
+                    }
+                    WalkState::Continue
+                })
             });
-        }
+        });
 
-        if src.is_dir() {
-            let _span = tracing::trace_span!("is_directory").entered();
+        while let Ok(src) = rx.recv() {
+            tracing::trace!("Walker source: {:?}", src);
+            println!("SOURCE: {}", src.path().display());
+            let src_path = src.path();
+            if let Some(file_type) = src.file_type() {
+                if file_type.is_dir() {
+                    // Nothing to do here
+                    // WalkDir is smart enough to handle directories and files
+                    let _span = tracing::trace_span!("is_directory").entered();
+                } else if file_type.is_file() {
+                    let dest = &dest.join(src.file_name());
+                    println!("DEST aFTER: {}", dest.display());
+                    let _span = tracing::trace_span!("is_file").entered();
+                    if let Some(parent) = dest.parent() {
+                        tracing::trace!(
+                            destination = src_path.to_string_lossy().as_ref(),
+                            "ensuring parent directories for destination",
+                        );
+                        fs::create_dir_all(parent).map_err(|err| Error::CreateDir {
+                            path:  dest.clone(),
+                            error: err,
+                        })?;
+                    }
 
-            let dir_contents = fs::read_dir(src).map_err(|err| Error::ReadDir {
-                path:  src.to_owned(),
-                error: err,
-            })?;
+                    tracing::debug!(
+                        source = src_path.to_string_lossy().as_ref(),
+                        destination = dest.to_string_lossy().as_ref(),
+                        "copying",
+                    );
 
-            for item in dir_contents {
-                let item = item.map_err(|err| Error::ReadDir {
-                    path:  src.to_owned(),
-                    error: err,
-                })?;
-
-                let dest = dest.join(item.file_name());
-                // No tracing event here because we are recursing
-                Self::copy(&item.path(), &dest)?;
-            }
-        } else if src.is_file() {
-            let _span = tracing::trace_span!("is_file").entered();
-
-            // Create parent directory only if there is an actual file to copy.
-            // Avoids unnecessarily creating empty directories.
-            if let Some(parent) = dest.parent() {
-                tracing::trace!(
-                    destination = src.to_string_lossy().as_ref(),
-                    "ensuring parent directories for destination",
+                    fs::copy(src_path.to_owned(), dest).map_err(|err| Error::CopyFile {
+                        src:   src_path.to_owned(),
+                        dest:  dest.clone(),
+                        error: err,
+                    })?;
+                } else {
+                    tracing::warn!(
+                        source = src_path.to_string_lossy().as_ref(),
+                        "source is not a file or directory",
+                    );
+                }
+            } else {
+                tracing::warn!(
+                    source = src.path().to_string_lossy().as_ref(),
+                    "source does not have a file type",
                 );
-                fs::create_dir_all(parent).map_err(|err| Error::CreateDir {
-                    path:  dest.to_owned(),
-                    error: err,
-                })?;
             }
-
-            tracing::debug!(
-                source = src.to_string_lossy().as_ref(),
-                destination = dest.to_string_lossy().as_ref(),
-                "copying",
-            );
-
-            fs::copy(src.to_owned(), dest).map_err(|err| Error::CopyFile {
-                src:   src.to_owned(),
-                dest:  dest.to_owned(),
-                error: err,
-            })?;
-        } else {
-            tracing::warn!(
-                source = src.to_string_lossy().as_ref(),
-                "source is not a file or directory",
-            );
         }
-
         Ok(())
     }
 
@@ -167,7 +196,7 @@ impl Pile {
             )
             .entered();
 
-            Self::copy(path, prefix)?;
+            Self::copy(self, path, prefix)?;
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched?");
         }
@@ -190,7 +219,7 @@ impl Pile {
             )
             .entered();
 
-            Self::copy(prefix, path)?;
+            Self::copy(self, prefix, path)?;
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched");
         }
