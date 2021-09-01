@@ -12,6 +12,9 @@ pub enum Error {
 
 /// The possible subcommands for `hoard`.
 #[derive(Clone, PartialEq, Debug, StructOpt)]
+#[structopt(
+    global_setting = structopt::clap::AppSettings::ColoredHelp,
+)]
 pub enum Command {
     /// Loads all configuration for validation.
     /// If the configuration loads and builds, this command succeeds.

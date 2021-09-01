@@ -3,10 +3,11 @@
 //! builder `Hoard`s for more details.
 
 pub use super::builder::hoard::Config;
+use crate::checkers::history::last_paths::HoardPaths;
 use crossbeam_channel as channel;
 use ignore::{WalkBuilder, WalkState};
 use std::{
-    collections::BTreeMap,
+    collections::HashMap,
     fs, io,
     path::{Path, PathBuf},
     thread,
@@ -74,6 +75,8 @@ pub struct Pile {
 
 impl Pile {
     /// Helper function for copying files and directories.
+    ///
+    /// The returned [`PilePaths`] has items inserted as (src, dest).
     ///
     /// # Errors
     ///
@@ -232,7 +235,7 @@ impl Pile {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MultipleEntries {
     /// The named [`Pile`]s in the hoard.
-    pub piles: BTreeMap<String, Pile>,
+    pub piles: HashMap<String, Pile>,
 }
 
 impl MultipleEntries {
@@ -282,9 +285,9 @@ impl MultipleEntries {
 #[allow(variant_size_differences)]
 pub enum Hoard {
     /// A single anonymous [`Pile`].
-    Single(Pile),
+    Anonymous(Pile),
     /// Multiple named [`Pile`]s.
-    Multiple(MultipleEntries),
+    Named(MultipleEntries),
 }
 
 impl Hoard {
@@ -299,8 +302,8 @@ impl Hoard {
                 .entered();
 
         match self {
-            Hoard::Single(single) => single.backup(prefix),
-            Hoard::Multiple(multiple) => multiple.backup(prefix),
+            Hoard::Anonymous(single) => single.backup(prefix),
+            Hoard::Named(multiple) => multiple.backup(prefix),
         }
     }
 
@@ -315,8 +318,22 @@ impl Hoard {
                 .entered();
 
         match self {
-            Hoard::Single(single) => single.restore(prefix),
-            Hoard::Multiple(multiple) => multiple.restore(prefix),
+            Hoard::Anonymous(single) => single.restore(prefix),
+            Hoard::Named(multiple) => multiple.restore(prefix),
+        }
+    }
+
+    /// Returns a [`HoardPaths`] based on this `Hoard`.
+    #[must_use]
+    pub fn get_paths(&self) -> HoardPaths {
+        match self {
+            Hoard::Anonymous(pile) => pile.path.clone().into(),
+            Hoard::Named(piles) => piles
+                .piles
+                .iter()
+                .filter_map(|(key, val)| val.path.clone().map(|path| (key.clone(), path)))
+                .collect::<HashMap<_, _>>()
+                .into(),
         }
     }
 }

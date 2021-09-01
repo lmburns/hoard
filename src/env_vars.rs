@@ -3,7 +3,40 @@
 //! The only function exported from this module is [`expand_env_in_path`].
 
 use directories::BaseDirs;
-use std::{env, path::PathBuf};
+use std::{env, fmt, path::PathBuf};
+
+// Following the example of `std::env::set_var`, the only things disallowed are
+// the equals sign and the NUL character.
+//
+// The `+?` is non-greedy matching, which is necessary for if there are multiple
+// variables. static ENV_REGEX: Lazy<Regex> = Lazy::new(|| {
+//     Regex::new(r#"\$\{[^(=|\x{0}|$)]+?}"#).expect("failed to compile regular
+// expression") });
+
+/// An error that may occur during expansion.
+///
+/// This is a wrapper for [`std::env::VarError`] that shows what environment
+/// variable could not be found.
+#[derive(Debug)]
+pub struct Error {
+    error: env::VarError,
+    var:   String,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.error {
+            env::VarError::NotPresent => write!(f, "{}: {}", self.error, self.var),
+            env::VarError::NotUnicode(_) => self.error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
 
 /// Takes the input string, expands all environment variables, and returns the
 /// expanded string as a [`PathBuf`].
@@ -21,12 +54,12 @@ use std::{env, path::PathBuf};
 /// ```
 ///
 /// # Errors
-///
-/// - Any [`VarError`](env::VarError) from looking up the environment variable's
-///   value.
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::too_many_lines)]
-pub fn expand_env_in_path(path: &str) -> Result<PathBuf, env::VarError> {
+/// 
+/// - Any [`VarError`](env::VarError) from looking up the environment variable's
+///   value.
+pub fn expand_env_in_path(path: &str) -> Result<PathBuf, Error> {
     let new_path = path.to_owned();
     let _span = tracing::debug_span!("expand_env_in_path", %path).entered();
 
@@ -65,12 +98,15 @@ pub fn expand_env_in_path(path: &str) -> Result<PathBuf, env::VarError> {
             c.is_alphanumeric() || c == '_'
         }
 
-        fn context(s: &str) -> Result<Option<String>, env::VarError> {
+        fn context(s: &str) -> Result<Option<String>, Error> {
             // std::env::var(s).map(Some)
             match env::var(s) {
                 Ok(value) => Ok(Some(value)),
                 Err(env::VarError::NotPresent) => Ok(None),
-                Err(e) => Err(e),
+                Err(e) => Err(Error {
+                    error: e,
+                    var:   s.to_owned(),
+                }),
             }
         }
 

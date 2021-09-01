@@ -278,9 +278,9 @@ mod tests {
         ];
 
         for (expected, input) in test_params {
+            let result: bool = input.clone().try_into().unwrap();
             assert_eq!(
-                expected,
-                input.clone().try_into().unwrap(),
+                result, expected,
                 "CombinatorInner did not AND items correctly: {:?}",
                 input
             );
@@ -492,9 +492,9 @@ mod tests {
     #[test]
     fn test_combinator() {
         for case in CASES.iter() {
+            let result: bool = case.combinator.clone().try_into().unwrap();
             assert_eq!(
-                case.evaluates_to,
-                case.combinator.clone().try_into().unwrap(),
+                result, case.evaluates_to,
                 "Combinator did not OR items correctly: {:?}",
                 case.combinator
             );
