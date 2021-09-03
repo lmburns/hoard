@@ -2,11 +2,22 @@
 
 # TODO
 * Execute command like `homemaker`?
-* Deal with `[[]]` in in `yaml`
+* Confirm this works `[[]]` in `yaml`
 * Work with the encryption
 * Global configuration as well
+* Run threads on receiver end of `WalkBuilder`
+* Ensure more tests
+* Option to add things to configuration from the command line
+* Colorize output when converting file
 
 ## Fork
+* Convert configuration file type from `json`, `yaml`, and `toml`
+```sh
+# Writes to stdout
+hoard -c config.toml config -xf json
+# Writes to file
+hoard -c config.json config -xf yaml -o new.yaml
+```
 * Expands both '~' and environment variables in `path_exists` as well as the `hoard`'s file path
   * Has ability to parse default variable settings that use another variable (i.e., `${ZDOTDIR:-$HOME/.config/zsh}`)
   * Variables do not need to be surrounded by curly braces unless the default value is given
@@ -21,6 +32,8 @@
   * Checkout `sample` directory for some configurations
   * These are can be used like the following:
 ```toml
+[global_config]
+  "ignores" = [".git/"] # Array of gitignore like patterns
 [hoards]
 [hoards.file]
   [hoards.file.config]
@@ -40,6 +53,8 @@
 
 This is where a `yaml` could be more legible and less verbose
 ```yaml
+global_config:
+  ignores: [".git/"]
 hoards:
   file:
     config:

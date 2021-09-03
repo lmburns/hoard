@@ -82,7 +82,7 @@ impl Checker for LastPaths {
         tracing::debug!("saving lastpaths to disk");
         let path = get_last_paths_file_path()?;
         tracing::trace!("converting lastpaths to JSON");
-        let content = serde_json::to_string(&last_paths)?;
+        let content = serde_json::to_string_pretty(&last_paths)?;
         if let Some(parent) = path.parent() {
             tracing::trace!("ensuring parent directories exist");
             fs::create_dir_all(parent)?;

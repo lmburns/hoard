@@ -1,9 +1,8 @@
 //! Keep records of previous operations (including on other system) to prevent
 //! inconsistencies and accidental overwrites or deletions.
 
-use crate::config::get_dirs;
-use directories::BaseDirs;
-use std::{env, fs, io, path::PathBuf};
+use crate::config::directories::PROJECT_DIRS;
+use std::{fs, io, path::PathBuf};
 use uuid::Uuid;
 
 pub mod last_paths;
@@ -14,44 +13,12 @@ const HISTORY_DIR_NAME: &str = "history";
 
 fn get_uuid_file() -> PathBuf {
     let _span = tracing::debug_span!("get_uuid_file").entered();
-
-    if env::consts::OS == "macos" {
-        // #[cfg(target_os = "macos")]
-        env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .or_else(|| {
-                BaseDirs::new()
-                    .map(|p| p.home_dir().to_owned())
-                    .map(|p| p.join(".config"))
-            })
-            .expect("Invalid configuration directory")
-            .join(UUID_FILE_NAME)
-    } else {
-        // #[cfg(not(target_os = "macos"))]
-        get_dirs().config_dir().join(UUID_FILE_NAME)
-    }
+    PROJECT_DIRS.config_dir().join(UUID_FILE_NAME)
 }
 
 fn get_history_root_dir() -> PathBuf {
     let _span = tracing::debug_span!("get_history_root_dir").entered();
-
-    if env::consts::OS == "macos" {
-        // #[cfg(target_os = "macos")]
-        env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .or_else(|| {
-                BaseDirs::new()
-                    .map(|p| p.home_dir().to_owned())
-                    .map(|p| p.join(".local").join("share"))
-            })
-            .expect("Invalid local data directory")
-            .join(HISTORY_DIR_NAME)
-    } else {
-        // #[cfg(not(target_os = "macos"))]
-        get_dirs().data_dir().join(HISTORY_DIR_NAME)
-    }
+    PROJECT_DIRS.data_dir().join(HISTORY_DIR_NAME)
 }
 
 fn get_history_dir_for_id(id: Uuid) -> PathBuf {

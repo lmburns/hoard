@@ -3,11 +3,12 @@
 use std::{
     collections::HashMap,
     convert::TryInto,
-    env, io,
+    ffi::OsStr,
+    io,
     path::{Path, PathBuf},
 };
 
-use directories::BaseDirs;
+// use normpath::PathExt;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use thiserror::Error;
@@ -15,7 +16,9 @@ use thiserror::Error;
 use self::hoard::Hoard;
 use environment::Environment;
 
-use crate::{command::Command, CONFIG_FILE_NAME, HOARDS_DIR_SLUG};
+use crate::{
+    command::Command, config::directories::PROJECT_DIRS, CONFIG_FILE_NAME, HOARDS_DIR_SLUG,
+};
 
 use super::Config;
 
@@ -27,11 +30,14 @@ pub mod hoard;
 #[derive(Debug, Error)]
 pub enum Error {
     /// Error while parsing a TOML configuration file.
-    #[error("failed to parse configuration file: {0}")]
-    DeserializeConfig(toml::de::Error),
+    #[error("failed to parse toml configuration file: {0}")]
+    DeserializeTomlConfig(toml::de::Error),
     /// Error while parsing a YAML configuration file.
-    #[error("failed to parse configuration file: {0}")]
+    #[error("failed to parse yaml configuration file: {0}")]
     DeserializeYamlConfig(serde_yaml::Error),
+    /// Error while parsing a JSON configuration file.
+    #[error("failed to parse json configuration file: {0}")]
+    DeserializeJsonConfig(serde_json::Error),
     /// Error while reading from a configuration file.
     #[error("failed to read configuration file: {0}")]
     ReadConfig(io::Error),
@@ -43,30 +49,48 @@ pub enum Error {
     ProcessHoard(#[from] hoard::Error),
 }
 
+/// Global configuration that applies to each of the hoards
+/// Ingores is the only option as of now, but the individual hoard
+/// configuration options will be available for the global as well.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", default)]
+pub struct GlobalConfig {
+    /// Global ignore patterns that mimic git's ignore patterns
+    pub ignores: Option<Vec<String>>, // ..super::hoard::Walker::default()
+}
+
+impl Default for GlobalConfig {
+    fn default() -> Self {
+        Self { ignores: None }
+    }
+}
+
 /// Intermediate data structure to build a [`Config`](crate::config::Config).
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize, StructOpt)]
 #[structopt(rename_all = "kebab")]
-#[serde(rename_all = "snake_case")]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Builder {
     #[structopt(skip)]
     #[serde(rename = "envs")]
-    environments: Option<HashMap<String, Environment>>,
+    environments:  Option<HashMap<String, Environment>>,
     #[structopt(skip)]
-    exclusivity:  Option<Vec<Vec<String>>>,
+    exclusivity:   Option<Vec<Vec<String>>>,
     #[structopt(short, long)]
-    hoards_root:  Option<PathBuf>,
+    hoards_root:   Option<PathBuf>,
     #[structopt(short, long)]
     #[serde(skip)]
-    config_file:  Option<PathBuf>,
+    config_file:   Option<PathBuf>,
     #[serde(skip)]
     #[structopt(subcommand)]
-    command:      Option<Command>,
+    command:       Option<Command>,
     #[serde(skip)]
     #[structopt(short, long)]
-    force:        bool,
+    force:         bool,
     #[structopt(skip)]
-    hoards:       Option<HashMap<String, Hoard>>,
+    hoards:        Option<HashMap<String, Hoard>>,
+    #[structopt(skip)]
+    global_config: Option<GlobalConfig>,
 }
 
 impl Default for Builder {
@@ -79,45 +103,13 @@ impl Builder {
     /// Returns the default path for the configuration file.
     fn default_config_file() -> PathBuf {
         tracing::debug!("getting default configuration file");
-
-        if env::consts::OS == "macos" {
-            // #[cfg(target_os = "macos")]
-            env::var_os("XDG_CONFIG_HOME")
-                .map(PathBuf::from)
-                .filter(|p| p.is_absolute())
-                .or_else(|| {
-                    BaseDirs::new()
-                        .map(|p| p.home_dir().to_owned())
-                        .map(|p| p.join(".config"))
-                })
-                .expect("Invalid local data directory")
-                .join(CONFIG_FILE_NAME)
-        } else {
-            // #[cfg(not(target_os = "macos"))]
-            super::get_dirs().config_dir().join(CONFIG_FILE_NAME)
-        }
+        PROJECT_DIRS.config_dir().join(CONFIG_FILE_NAME)
     }
 
     /// Returns the default location for storing hoards.
     fn default_hoard_root() -> PathBuf {
         tracing::debug!("getting default hoard root");
-
-        if env::consts::OS == "macos" {
-            // #[cfg(target_os = "macos")]
-            env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .filter(|p| p.is_absolute())
-                .or_else(|| {
-                    BaseDirs::new()
-                        .map(|p| p.home_dir().to_owned())
-                        .map(|p| p.join(".local").join("share"))
-                })
-                .expect("Invalid local data directory")
-                .join(HOARDS_DIR_SLUG)
-        } else {
-            // #[cfg(not(target_os = "macos"))]
-            super::get_dirs().data_dir().join(HOARDS_DIR_SLUG)
-        }
+        PROJECT_DIRS.data_dir().join(HOARDS_DIR_SLUG)
     }
 
     /// Create a new `Builder`.
@@ -128,13 +120,14 @@ impl Builder {
     pub fn new() -> Self {
         tracing::trace!("creating new config builder");
         Self {
-            hoards:       None,
-            hoards_root:  None,
-            config_file:  None,
-            command:      None,
-            environments: None,
-            exclusivity:  None,
-            force:        false,
+            hoards:        None,
+            hoards_root:   None,
+            config_file:   None,
+            command:       None,
+            environments:  None,
+            exclusivity:   None,
+            force:         false,
+            global_config: None,
         }
     }
 
@@ -144,10 +137,10 @@ impl Builder {
     /// # Errors
     ///
     /// Variants of [`enum@Error`] related to reading and parsing the file.
-    pub fn from_file(path: &Path) -> Result<Self, Error> {
+    pub fn from_file_toml(path: &Path) -> Result<Self, Error> {
         tracing::debug!("reading configuration from \"{}\"", path.to_string_lossy());
         let s = std::fs::read_to_string(path).map_err(Error::ReadConfig)?;
-        toml::from_str(&s).map_err(Error::DeserializeConfig)
+        toml::from_str(&s).map_err(Error::DeserializeTomlConfig)
     }
 
     /// Create a new [`Builder`] pre-populated with the contents of the given
@@ -156,11 +149,22 @@ impl Builder {
     /// # Errors
     ///
     /// Variants of [`enum@Error`] related to reading and parsing the file.
-    #[allow(unused)]
     pub fn from_file_yaml(path: &Path) -> Result<Self, Error> {
         tracing::debug!("reading configuration from \"{}\"", path.to_string_lossy());
         let s = std::fs::read_to_string(path).map_err(Error::ReadConfig)?;
         serde_yaml::from_str(&s).map_err(Error::DeserializeYamlConfig)
+    }
+
+    /// Create a new [`Builder`] pre-populated with the contents of the given
+    /// JSON file.
+    ///
+    /// # Errors
+    ///
+    /// Variants of [`enum@Error`] related to reading and parsing the file.
+    pub fn from_file_json(path: &Path) -> Result<Self, Error> {
+        tracing::debug!("reading configuration from \"{}\"", path.to_string_lossy());
+        let s = std::fs::read_to_string(path).map_err(Error::ReadConfig)?;
+        serde_json::from_str(&s).map_err(Error::DeserializeJsonConfig)
     }
 
     /// Helper method to process command-line arguments and the config file
@@ -179,23 +183,29 @@ impl Builder {
             .clone()
             .unwrap_or_else(Self::default_config_file);
 
+        // .map_or_else(Self::default_config_file, |p| {
+        //     p.normalize()
+        //         .and_then(|pb| {
+        //             if pb.is_absolute() {
+        //                 Ok(pb.as_path().to_path_buf())
+        //             } else {
+        //                 env::current_dir().map(|cwd| cwd.join(pb))
+        //             }
+        //         })
+        //   .unwrap_or_else(Self::default_config_file)
+        // });
+
         tracing::trace!(
             ?config_file,
             "configuration file is \"{}\"",
             config_file.to_string_lossy()
         );
 
-        let from_file = if let Some(ext) = config_file.extension() {
-            if ext == "yaml" || ext == "yml" {
-                Self::from_file_yaml(&config_file)?
-            } else {
-                Self::from_file(&config_file)?
-            }
-        } else {
-            Self::from_file(&config_file)?
+        let from_file = match config_file.extension().and_then(OsStr::to_str) {
+            Some("yaml" | "yml") => Self::from_file_yaml(&config_file)?,
+            Some("json") => Self::from_file_json(&config_file)?,
+            _ => Self::from_file_toml(&config_file)?,
         };
-
-        // let from_file = ;
 
         tracing::debug!("merging configuration file and cli arguments");
         Ok(from_file.layer(from_args))
@@ -365,6 +375,8 @@ impl Builder {
         tracing::debug!(?command);
         let force = self.force;
         tracing::debug!(?force);
+        let global_config = self.global_config.unwrap_or_else(GlobalConfig::default);
+        tracing::debug!(?global_config);
 
         tracing::debug!("processing hoards...");
         let hoards = self
@@ -382,6 +394,7 @@ impl Builder {
             command,
             hoards_root,
             config_file,
+            global_config,
             hoards,
             force,
         })
@@ -397,27 +410,29 @@ mod tests {
 
         fn get_default_populated_builder() -> Builder {
             Builder {
-                hoards_root:  Some(Builder::default_hoard_root()),
-                config_file:  Some(Builder::default_config_file()),
-                command:      Some(Command::Validate),
-                environments: None,
-                exclusivity:  None,
-                hoards:       None,
-                force:        false,
+                hoards_root:   Some(Builder::default_hoard_root()),
+                config_file:   Some(Builder::default_config_file()),
+                command:       Some(Command::Validate),
+                environments:  None,
+                exclusivity:   None,
+                hoards:        None,
+                force:         false,
+                global_config: None,
             }
         }
 
         fn get_non_default_populated_builder() -> Builder {
             Builder {
-                hoards_root:  Some(PathBuf::from("/testing/saves")),
-                config_file:  Some(PathBuf::from("/testing/config.toml")),
-                command:      Some(Command::Restore {
+                hoards_root:   Some(PathBuf::from("/testing/saves")),
+                config_file:   Some(PathBuf::from("/testing/config.toml")),
+                command:       Some(Command::Restore {
                     hoards: vec!["test".into()],
                 }),
-                environments: None,
-                exclusivity:  None,
-                hoards:       None,
-                force:        false,
+                environments:  None,
+                exclusivity:   None,
+                hoards:        None,
+                force:         false,
+                global_config: None,
             }
         }
 
@@ -429,13 +444,14 @@ mod tests {
         #[test]
         fn new_builder_is_all_none() {
             let expected = Builder {
-                hoards_root:  None,
-                config_file:  None,
-                command:      None,
-                environments: None,
-                hoards:       None,
-                exclusivity:  None,
-                force:        false,
+                hoards_root:   None,
+                config_file:   None,
+                command:       None,
+                environments:  None,
+                hoards:        None,
+                exclusivity:   None,
+                force:         false,
+                global_config: None,
             };
 
             assert_eq!(

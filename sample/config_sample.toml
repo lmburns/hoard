@@ -1,3 +1,11 @@
+# Global configuration
+#
+# ignores = array of patterns to ignore that apply to every hoard
+# These are patterns that are found in .gitignore files, not a regex patter
+# like 'exlcude' below
+[global_config]
+    ignores = ["exe/"]
+
 # Lists of environment names.
 #
 # Environment names in lists together cannot appear in the same environment condition string.
@@ -70,6 +78,23 @@ exclusivity = [
 # Both `fish|linux` and `linux|fish` match the same way and are considered
 # the same condition internally.
 [hoards.fish]
+    # Individual hoard configuration
+    # Notice that 'config' is a reserved word here
+    [hoards.config]
+        # Whether or not to follow symlinks
+        "follow_links" = true
+        # Whether or not to skip hidden files
+        "hidden" = true
+        # Pattern of files to only include
+        "pattern" = "*.txt"
+        # Whether the pattern is to be interpreted as a regex or a glob
+        "regex" = true
+        # Max depth to traverse
+        "max_depth" = 2
+        # Whether the pattern should be case sensitive or not
+        "case_sensitive" = false
+        # Patterns to exclude (notice they are regex patterns, not like the ignores pattern above)
+        "exclude" = ["*patt*"]
     [hoards.fish.confdir]
         "linux|fish" = "/home/shadow53/.config/fish/conf.d"
     [hoards.fish.functions]

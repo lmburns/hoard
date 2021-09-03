@@ -1,5 +1,4 @@
 //! See [`Config`].
-
 pub use self::builder::Builder;
 use self::hoard::Hoard;
 use crate::{
@@ -11,21 +10,18 @@ use crate::{
         Checker,
     },
     command::Command,
+    config::{
+        builder::GlobalConfig,
+        filetypes::{ConfigConversion, Error as ConversionError},
+    },
 };
-use directories::ProjectDirs;
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
 
 pub mod builder;
+pub mod directories;
+pub mod filetypes;
 pub mod hoard;
-
-/// Get the project directories for this project.
-#[must_use]
-pub fn get_dirs() -> ProjectDirs {
-    tracing::trace!("determining project default folders");
-    ProjectDirs::from("com", "shadow53", "hoard")
-        .expect("could not detect user home directory to place program files")
-}
 
 /// Errors that can occur while working with a [`Config`].
 #[derive(Debug, Error)]
@@ -61,6 +57,12 @@ pub enum Error {
     /// An error occurred while checking against remote operations.
     #[error("error while checking against recent remote operations: {0}")]
     Operation(#[from] HoardOperationError),
+    /// Error during file type conversion
+    #[error("error converting file types: {0}")]
+    ConversionError(#[from] ConversionError),
+    /// Error when getting config/data dirs
+    #[error("invalid directory: {0}")]
+    InvalidDirectory(String),
 }
 
 /// A (processed) configuration.
@@ -69,16 +71,18 @@ pub enum Error {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
     /// The command to run.
-    pub command: Command,
+    pub command:   Command,
     /// The root directory to backup/restore hoards from.
-    hoards_root: PathBuf,
+    hoards_root:   PathBuf,
     /// Path to a configuration file.
-    config_file: PathBuf,
+    config_file:   PathBuf,
+    /// Global configuration options
+    global_config: GlobalConfig,
     /// All of the configured hoards.
-    hoards:      HashMap<String, Hoard>,
+    hoards:        HashMap<String, Hoard>,
     /// Whether to force the operation to continue despite possible
     /// inconsistencies.
-    force:       bool,
+    force:         bool,
 }
 
 impl Default for Config {
@@ -114,7 +118,6 @@ impl Config {
         let config = Builder::from_args_then_file()
             .map(Builder::build)?
             .map_err(Error::Builder)?;
-        println!("SELF CONFIG: {:#?}", config);
         tracing::info!("loaded configuration.");
         Ok(config)
     }
@@ -171,6 +174,31 @@ impl Config {
     pub fn run(&self) -> Result<(), Error> {
         tracing::trace!(command = ?self.command, "running command");
         match &self.command {
+            Command::Config {
+                convert,
+                input_format,
+                output_format,
+                output_file,
+                theme,
+                color,
+            } => {
+                tracing::info!("configuration is being edited");
+                if *convert {
+                    let conversion = ConfigConversion::new(
+                        &self.config_file,
+                        input_format,
+                        output_file,
+                        output_format,
+                        theme.clone(),
+                        *color,
+                    )?;
+
+                    conversion.run().map_err(Error::from)?;
+
+                    //         crate::config::filetypes::Error::
+                    // ConversionError(err.to_string())
+                }
+            },
             Command::Validate => {
                 tracing::info!("configuration is valid");
             },
@@ -186,10 +214,12 @@ impl Config {
 
                     tracing::info!(hoard = %name, "backing up hoard");
                     let _span = tracing::info_span!("backup", hoard = %name).entered();
-                    hoard.backup(&prefix).map_err(|error| Error::Backup {
-                        name: name.to_string(),
-                        error,
-                    })?;
+                    hoard
+                        .backup(&prefix, &self.global_config)
+                        .map_err(|error| Error::Backup {
+                            name: name.to_string(),
+                            error,
+                        })?;
                 }
 
                 checkers.commit_to_disk()?;
@@ -206,13 +236,18 @@ impl Config {
 
                     tracing::info!(hoard = %name, "restoring hoard");
                     let _span = tracing::info_span!("restore", hoard = %name).entered();
-                    hoard.restore(&prefix).map_err(|error| Error::Restore {
-                        name: name.to_string(),
-                        error,
-                    })?;
+                    hoard
+                        .restore(&prefix, &self.global_config)
+                        .map_err(|error| Error::Restore {
+                            name: name.to_string(),
+                            error,
+                        })?;
                 }
 
                 checkers.commit_to_disk()?;
+            },
+            Command::Add { env } => {
+                println!("ENV: {:?}", env);
             },
         }
 

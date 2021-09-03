@@ -10,7 +10,6 @@ use std::{convert::TryInto, fmt, fmt::Formatter};
 /// works.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Hash)]
 #[serde(transparent)]
-#[allow(clippy::module_name_repetitions)]
 pub struct ExeExists(pub String);
 
 impl TryInto<bool> for ExeExists {

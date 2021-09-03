@@ -3,37 +3,27 @@
 //! builder `Hoard`s for more details.
 
 pub use super::builder::hoard::Config;
-use crate::checkers::history::last_paths::HoardPaths;
+use crate::{
+    checkers::history::last_paths::HoardPaths,
+    config::builder::GlobalConfig,
+    utils::{
+        contains_upperchar, create_temp_ignore, delete_file, osstr_to_bytes, write_temp_ignore,
+    },
+};
 use colored::Colorize;
 use crossbeam_channel as channel;
 use ignore::{overrides::OverrideBuilder, WalkBuilder, WalkState};
-use once_cell::sync::Lazy;
-use regex::bytes::{Regex, RegexBuilder};
+use regex::bytes::RegexBuilder;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
     sync::Arc,
     thread,
 };
 use thiserror::Error;
-
-/// Convert search string to bytes
-#[must_use]
-pub fn osstr_to_bytes(input: &OsStr) -> Cow<[u8]> {
-    use std::os::unix::ffi::OsStrExt;
-    Cow::Borrowed(input.as_bytes())
-}
-
-/// Match uppercase characters against Unicode characters as well. Tags can also
-/// be any valid Unicode character
-pub fn contains_upperchar(pattern: &str) -> bool {
-    static UPPER_REG: Lazy<Regex> = Lazy::new(|| Regex::new(r"[[:upper:]]").unwrap());
-    let cow_pat: Cow<OsStr> = Cow::Owned(OsString::from(pattern));
-    UPPER_REG.is_match(&osstr_to_bytes(cow_pat.as_ref()))
-}
 
 /// Errors that can happen while backing up or restoring a hoard.
 #[derive(Debug, Error)]
@@ -91,6 +81,9 @@ pub enum Error {
     /// Failure to parse regex pattern
     #[error("failed to parse regex pattern: {0}")]
     RegexError(String),
+    /// Failure to parse ignore pattern
+    #[error("failed to parse ignore pattern: {0}")]
+    IgnorePattern(String),
 }
 
 /// A single path to hoard, with configuration.
@@ -115,7 +108,7 @@ impl Pile {
     ///
     /// Various sorts of I/O errors as the different [`Error`] variants.
     #[allow(clippy::too_many_lines)]
-    fn copy(&self, src: &Path, dest: &Path) -> Result<(), Error> {
+    fn copy(&self, src: &Path, dest: &Path, global: &GlobalConfig) -> Result<(), Error> {
         let _span = tracing::trace_span!(
             "copy",
             source = ?src,
@@ -200,6 +193,19 @@ impl Pile {
             .git_exclude(false)
             .parents(false);
 
+        if let Some(ref ignore) = global.ignores {
+            let tmp =
+                create_temp_ignore(&move |file: &mut fs::File| write_temp_ignore(ignore, file));
+            let res = builder.add_ignore(&tmp);
+            match res {
+                Some(ignore::Error::Partial(_)) | None => (),
+                Some(err) => {
+                    eprintln!("{}", Error::IgnorePattern(err.to_string()));
+                },
+            }
+            delete_file(tmp);
+        }
+
         let walker = builder.build_parallel();
         let (tx, rx) = channel::unbounded::<ignore::DirEntry>();
 
@@ -244,21 +250,17 @@ impl Pile {
             tracing::trace!("Walker source: {:?}", src);
             let src_path = src.path();
 
-            println!("DEST BEFORE: {}", dest.display());
-
-            let components = src_path
+            let dest = &mut PathBuf::from(dest);
+            src_path
                 .iter()
                 .rev()
                 .clone()
                 .collect::<Vec<_>>()
-                .drain(0..src.depth())
-                .collect::<Vec<_>>();
-
-            let dest = &mut PathBuf::from(dest);
-
-            for comp in components.iter().rev() {
-                dest.push(comp);
-            }
+                .drain(..src.depth())
+                .collect::<Vec<_>>()
+                .iter()
+                .rev()
+                .for_each(|comp| dest.push(comp));
 
             if let Some(file_type) = src.file_type() {
                 if file_type.is_dir() {
@@ -311,7 +313,7 @@ impl Pile {
     /// # Errors
     ///
     /// Various sorts of I/O errors as the different [`enum@Error`] variants.
-    pub fn backup(&self, prefix: &Path) -> Result<(), Error> {
+    pub fn backup(&self, prefix: &Path, global: &GlobalConfig) -> Result<(), Error> {
         if let Some(path) = &self.path {
             let _span = tracing::debug_span!(
                 "backup_pile",
@@ -320,7 +322,7 @@ impl Pile {
             )
             .entered();
 
-            Self::copy(self, path, prefix)?;
+            Self::copy(self, path, prefix, global)?;
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched?");
         }
@@ -333,7 +335,7 @@ impl Pile {
     /// # Errors
     ///
     /// Various sorts of I/O errors as the different [`enum@Error`] variants.
-    pub fn restore(&self, prefix: &Path) -> Result<(), Error> {
+    pub fn restore(&self, prefix: &Path, global: &GlobalConfig) -> Result<(), Error> {
         // TODO: do stuff with pile config
         if let Some(path) = &self.path {
             let _span = tracing::debug_span!(
@@ -343,7 +345,7 @@ impl Pile {
             )
             .entered();
 
-            Self::copy(self, prefix, path)?;
+            Self::copy(self, prefix, path, global)?;
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched");
         }
@@ -365,7 +367,7 @@ impl MultipleEntries {
     /// # Errors
     ///
     /// See [`Pile::backup`].
-    pub fn backup(&self, prefix: &Path) -> Result<(), Error> {
+    pub fn backup(&self, prefix: &Path, global: &GlobalConfig) -> Result<(), Error> {
         for (name, entry) in &self.piles {
             let _span = tracing::info_span!(
                 "backup_multi_pile",
@@ -374,7 +376,7 @@ impl MultipleEntries {
             .entered();
 
             let sub_prefix = prefix.join(name);
-            entry.backup(&sub_prefix)?;
+            entry.backup(&sub_prefix, global)?;
         }
 
         Ok(())
@@ -385,7 +387,7 @@ impl MultipleEntries {
     /// # Errors
     ///
     /// See [`Pile::restore`].
-    pub fn restore(&self, prefix: &Path) -> Result<(), Error> {
+    pub fn restore(&self, prefix: &Path, global: &GlobalConfig) -> Result<(), Error> {
         for (name, entry) in &self.piles {
             let _span = tracing::info_span!(
                 "restore_multi_pile",
@@ -394,7 +396,7 @@ impl MultipleEntries {
             .entered();
 
             let sub_prefix = prefix.join(name);
-            entry.restore(&sub_prefix)?;
+            entry.restore(&sub_prefix, global)?;
         }
 
         Ok(())
@@ -417,14 +419,14 @@ impl Hoard {
     /// # Errors
     ///
     /// See [`Pile::backup`].
-    pub fn backup(&self, prefix: &Path) -> Result<(), Error> {
+    pub fn backup(&self, prefix: &Path, global: &GlobalConfig) -> Result<(), Error> {
         let _span =
             tracing::trace_span!("backup_hoard", prefix = prefix.to_string_lossy().as_ref())
                 .entered();
 
         match self {
-            Hoard::Anonymous(single) => single.backup(prefix),
-            Hoard::Named(multiple) => multiple.backup(prefix),
+            Hoard::Anonymous(single) => single.backup(prefix, global),
+            Hoard::Named(multiple) => multiple.backup(prefix, global),
         }
     }
 
@@ -433,14 +435,14 @@ impl Hoard {
     /// # Errors
     ///
     /// See [`Pile::restore`].
-    pub fn restore(&self, prefix: &Path) -> Result<(), Error> {
+    pub fn restore(&self, prefix: &Path, global: &GlobalConfig) -> Result<(), Error> {
         let _span =
             tracing::trace_span!("restore_hoard", prefix = prefix.to_string_lossy().as_ref(),)
                 .entered();
 
         match self {
-            Hoard::Anonymous(single) => single.restore(prefix),
-            Hoard::Named(multiple) => multiple.restore(prefix),
+            Hoard::Anonymous(single) => single.restore(prefix, global),
+            Hoard::Named(multiple) => multiple.restore(prefix, global),
         }
     }
 

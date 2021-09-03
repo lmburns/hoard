@@ -102,8 +102,8 @@ impl Default for Walker {
 pub struct Config {
     /// Encryption configuration options
     pub encryption: Option<Encryption>,
-    #[serde(flatten)]
     /// WalkBuilder configuration options
+    #[serde(flatten)]
     pub walker:     Walker,
 }
 
@@ -127,7 +127,6 @@ impl Pile {
         )
         .entered();
 
-        println!("USING SINGLE SELF: {:#?}", self);
         let Pile { config, items } = self;
         let trie = EnvTrie::new(&items, exclusivity)?;
         let path = trie.get_path(envs)?.map(expand_env_in_path).transpose()?;
@@ -150,7 +149,6 @@ impl MultipleEntries {
         envs: &HashMap<String, bool>,
         exclusivity: &[Vec<String>],
     ) -> Result<ConfigMultiple, Error> {
-        println!("USING MULTIPLE SELF: {:#?}", self);
         let MultipleEntries { config, items } = self;
         let items = items
             .into_iter()

@@ -5,11 +5,11 @@
 
 [envs.um]
     exe_exists = ["um"]
-  # # or / [[]] = and
-    # path_exists = [
-    #    "/Users/lucasburns/.config/um",
-    #    "/Users/lucasburns/.um"
-    # ]
+  # or / [[]] = and
+    path_exists = [
+       "/Users/lucasburns/.config/um",
+       "/Users/lucasburns/.um"
+    ]
 
 [envs.macos]
     os = ["macos"]

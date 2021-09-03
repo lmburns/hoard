@@ -65,6 +65,7 @@
     variant_size_differences,
     while_true
 )]
+#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
 pub use config::Config;
 
 pub mod checkers;
@@ -72,6 +73,7 @@ pub mod combinator;
 pub mod command;
 pub mod config;
 pub mod env_vars;
+pub mod utils;
 
 /// The default file name of the configuration file.
 pub const CONFIG_FILE_NAME: &str = "config.yml";

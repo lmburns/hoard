@@ -3,3 +3,5 @@
 *.profraw
 Cargo.lock
 sample/out
+extra/
+assets/
