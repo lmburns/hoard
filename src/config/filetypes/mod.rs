@@ -19,12 +19,27 @@ use std::{
 use self::{
     assets::HighlightAssets,
     format::{ConfigFormat, Formatted},
-    printer::{PlainTextPrinter, Printer},
+    printer::{HighlightTextPrinter, PlainTextPrinter, Printer},
 };
+use crate::config::filetypes::assets::assets_from_cache_or_binary;
 
+use syntect::{dumps::from_binary, highlighting::ThemeSet};
 use thiserror::Error;
 
-use syntect::dumps::from_binary;
+fn get_serialized_integrated_syntaxset() -> &'static [u8] {
+    include_bytes!("../../../assets/syntaxes.bin")
+}
+
+fn get_integrated_themeset() -> ThemeSet {
+    from_binary(include_bytes!("../../../assets/themes.bin"))
+}
+
+// fn load_integrated_assets() -> HighlightAssets {
+//     HighlightAssets::new(
+//         from_binary(include_bytes!("../../../assets/syntaxes.bin")),
+//         from_binary(include_bytes!("../../../assets/themes.bin")),
+//     )
+// }
 
 /// Shorthand alias for Result using this modules's [`Errror`]
 pub type Result<T> = std::result::Result<T, Error>;
@@ -85,11 +100,21 @@ pub enum Error {
         #[source]
         error: io::Error,
     },
+    /// Error with writing syntaxes to a directory
+    #[error("there was an error writing file for cache {file} \n-{desc:?}: {error}")]
+    WriteFile {
+        /// File where error occurred
+        file:  String,
+        /// Description of cache
+        desc:  Option<String>,
+        /// Error from reading
+        error: String,
+    },
 }
 
 /// Struct that holds information for converting between filetypes: json, yaml,
 /// toml
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConfigConversion {
     input_file:    PathBuf,
     input_format:  ConfigFormat,
@@ -97,7 +122,6 @@ pub struct ConfigConversion {
     output_format: ConfigFormat,
     theme:         String,
     color:         bool,
-    assets:        HighlightAssets,
 }
 
 impl ConfigConversion {
@@ -113,14 +137,14 @@ impl ConfigConversion {
         output_file: &Option<PathBuf>,
         output_format: &Option<String>,
         theme: Option<String>,
-        color: Option<bool>,
+        color: bool,
     ) -> Result<Self> {
         Ok(Self {
-            input_file:    input_file.to_path_buf(),
-            input_format:  infer_format(Some(&input_file.to_path_buf()), input_format.as_ref())?,
-            output_file:   output_file.clone(),
+            input_file: input_file.to_path_buf(),
+            input_format: infer_format(Some(&input_file.to_path_buf()), input_format.as_ref())?,
+            output_file: output_file.clone(),
             output_format: infer_format(output_file.as_ref(), output_format.as_ref())?,
-            theme:         theme
+            theme: theme
                 .map(String::from)
                 .or_else(|| env::var("HOARD_THEME").ok())
                 .map_or_else(
@@ -133,16 +157,22 @@ impl ConfigConversion {
                         }
                     },
                 ),
-            color:         color.unwrap_or_else(|| atty::is(atty::Stream::Stdout)),
-            assets:        Self::load_integrated_assets(),
+            color,
         })
     }
 
-    fn load_integrated_assets() -> HighlightAssets {
-        HighlightAssets::new(
-            from_binary(include_bytes!("../../../assets/syntaxes.bin")),
-            from_binary(include_bytes!("../../../assets/themes.bin")),
-        )
+    /// Like `Self::new()`, but isn't used for displaying output. It is intead
+    /// used in the modifying subcommands to overrite the configuration file
+    pub fn overwrite(input_file: &Path) -> Result<Self> {
+        let format = infer_format(Some(&input_file.to_path_buf()), None)?;
+        Ok(Self {
+            input_file:    input_file.to_path_buf(),
+            input_format:  format,
+            output_file:   Some(input_file.to_path_buf()),
+            output_format: format,
+            theme:         String::from(HighlightAssets::default_theme()),
+            color:         false,
+        })
     }
 
     /// The actual conversion process between file types
@@ -151,20 +181,20 @@ impl ConfigConversion {
     /// If an error occurs during the actual conversion process, one will be
     /// thrown
     pub fn run(&self) -> Result<()> {
+        let _span = tracing::trace_span!("running configuration conversion").entered();
+        tracing::trace!("configuration: {:?}", self);
+        let assets = assets_from_cache_or_binary(self.theme != *HighlightAssets::default_theme())?;
         tracing::trace!(
             "Themes: {:?}",
-            self.assets
-                .themes()
-                .iter()
-                .map(|&t| t.name.as_deref().unwrap_or("** unnamed theme **"))
-                .collect::<Vec<_>>()
+            assets.themes().map(String::from).collect::<Vec<_>>()
         );
         tracing::trace!(
             "Syntaxes: {:?}",
-            self.assets
-                .syntaxes()
+            assets
+                .get_syntaxes()?
                 .iter()
-                .map(|s| s.name.as_str())
+                .filter(|syn| !syn.hidden && !syn.file_extensions.is_empty())
+                .map(|s| s.name.clone())
                 .collect::<Vec<_>>()
         );
 
@@ -173,7 +203,7 @@ impl ConfigConversion {
             .convert_to(self.output_format)
             .map_err(|err| Error::ConversionError(err.to_string()))?;
 
-        self.write_to_output(&output_text)
+        self.write_to_output(&output_text, &assets, &self.theme)
     }
 
     /// Read file type that is specified by the '--config' option
@@ -192,7 +222,12 @@ impl ConfigConversion {
     ///
     /// # Errors
     /// Returns errors from creating file that is being written to
-    pub fn write_to_output(&self, text: &Formatted) -> Result<()> {
+    pub fn write_to_output(
+        &self,
+        text: &Formatted,
+        assets: &HighlightAssets,
+        theme: &str,
+    ) -> Result<()> {
         let stdout = stdout();
         let lock = stdout.lock();
         let mut w: Box<dyn Write> = if let Some(f) = self.output_file.as_ref() {
@@ -201,14 +236,18 @@ impl ConfigConversion {
             Box::new(lock)
         };
 
-        let printer: Box<dyn Printer> = Box::new(PlainTextPrinter::default());
-        // Box::new(HighlightTextPrinter::new(&self.assets))
+        let printer: Box<dyn Printer> = if self.output_file.is_none() && self.color {
+            Box::new(HighlightTextPrinter::new(assets, theme))
+        } else {
+            Box::new(PlainTextPrinter::default())
+        };
 
         printer.print(&mut w, text)
     }
 }
 
-fn infer_format(file: Option<&PathBuf>, format_name: Option<&String>) -> Result<ConfigFormat> {
+/// Infer format of config or input file
+pub fn infer_format(file: Option<&PathBuf>, format_name: Option<&String>) -> Result<ConfigFormat> {
     let _span = tracing::trace_span!("inferring format").entered();
     if let Some(format_name) = format_name {
         tracing::trace!(format = ?format_name);

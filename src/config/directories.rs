@@ -15,18 +15,21 @@ pub static PROJECT_DIRS: Lazy<HoardProjectDirs> =
 /// Get config directory with `static PROJECT_DIRS`
 #[must_use]
 pub fn config_dir() -> Cow<'static, str> {
+    tracing::trace!("got config dir");
     PROJECT_DIRS.config_dir().to_string_lossy()
 }
 
 /// Get cache directory with `static PROJECT_DIRS`
 #[must_use]
 pub fn cache_dir() -> Cow<'static, str> {
+    tracing::trace!("got cache dir");
     PROJECT_DIRS.cache_dir().to_string_lossy()
 }
 
 /// Get local data directory with `static PROJECT_DIRS`
 #[must_use]
 pub fn data_dir() -> Cow<'static, str> {
+    tracing::trace!("got data dir");
     PROJECT_DIRS.data_dir().to_string_lossy()
 }
 

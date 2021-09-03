@@ -12,9 +12,10 @@ use crate::{
     command::Command,
     config::{
         builder::GlobalConfig,
-        filetypes::{ConfigConversion, Error as ConversionError},
+        filetypes::{assets::run_cache, ConfigConversion, Error as ConversionError},
     },
 };
+
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
 
@@ -22,6 +23,7 @@ pub mod builder;
 pub mod directories;
 pub mod filetypes;
 pub mod hoard;
+// pub mod modify;
 
 /// Errors that can occur while working with a [`Config`].
 #[derive(Debug, Error)]
@@ -118,6 +120,7 @@ impl Config {
         let config = Builder::from_args_then_file()
             .map(Builder::build)?
             .map_err(Error::Builder)?;
+        // println!("CONIFIG: {:#?}",  config.global_config.ignores);
         tracing::info!("loaded configuration.");
         Ok(config)
     }
@@ -171,7 +174,7 @@ impl Config {
     /// # Errors
     ///
     /// Any [`enum@Error`] that might happen while running the command.
-    pub fn run(&self) -> Result<(), Error> {
+    pub fn run(&mut self) -> Result<(), Error> {
         tracing::trace!(command = ?self.command, "running command");
         match &self.command {
             Command::Config {
@@ -181,24 +184,26 @@ impl Config {
                 output_file,
                 theme,
                 color,
-            } => {
-                tracing::info!("configuration is being edited");
+                cache_build,
+                cache_clear,
+                source,
+                dest,
+            } =>
                 if *convert {
+                    tracing::info!("configuration is being edited");
                     let conversion = ConfigConversion::new(
                         &self.config_file,
                         input_format,
                         output_file,
                         output_format,
                         theme.clone(),
-                        *color,
+                        *color && atty::is(atty::Stream::Stdout),
                     )?;
 
                     conversion.run().map_err(Error::from)?;
-
-                    //         crate::config::filetypes::Error::
-                    // ConversionError(err.to_string())
-                }
-            },
+                } else if *cache_build || *cache_clear {
+                    run_cache(*cache_build, *cache_clear, source, dest)?;
+                },
             Command::Validate => {
                 tracing::info!("configuration is valid");
             },
@@ -246,8 +251,24 @@ impl Config {
 
                 checkers.commit_to_disk()?;
             },
-            Command::Add { env } => {
-                println!("ENV: {:?}", env);
+            Command::Add { env: _, ignores } => {
+                if let Some(patt) = ignores {
+                    self.global_config.ignores = self
+                        .global_config
+                        .ignores
+                        .clone()
+                        .map(|mut ignores| {
+                            ignores.push(patt.clone());
+                            ignores
+                        })
+                        .or_else(|| Some(vec![patt.to_string()]));
+                }
+
+                // WIP
+                let conversion = ConfigConversion::overwrite(&self.config_file)?;
+                conversion.run().map_err(Error::from)?;
+
+                // println!("IGNORES: {:#?}", self);
             },
         }
 

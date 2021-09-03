@@ -52,7 +52,7 @@ fn main() {
     };
 
     // Get configuration
-    let config = match Config::load() {
+    let mut config = match Config::load() {
         Ok(config) => config,
         Err(err) => error_and_exit(err),
     };

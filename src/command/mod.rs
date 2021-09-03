@@ -27,10 +27,10 @@ pub enum Error {
 pub enum Command {
     /// Operations on configuration file
     Config {
-        /// Has to be used to actually convert filetypes
+        /// Whether to convert file-type
         #[structopt(name = "convert", short = "x", long = "convert", takes_value = false)]
         convert:       bool,
-        /// Input format (optional, uses --config <file>)
+        /// Input file format
         #[structopt(
             short = "i", long = "input-format",
             takes_value = true,
@@ -38,12 +38,11 @@ pub enum Command {
             possible_values = &ConfigFormat::variants()
         )]
         input_format:  Option<String>,
-        /// Output format
+        /// Output file format
         #[structopt(
             short = "f", long = "output-format",
             takes_value = true,
             value_name = "format",
-            requires = "convert",
             possible_values = &ConfigFormat::variants()
         )]
         output_format: Option<String>,
@@ -52,16 +51,49 @@ pub enum Command {
             short = "o",
             long = "output-file",
             takes_value = true,
-            requires = "convert",
             value_name = "file"
         )]
         output_file:   Option<PathBuf>,
-        /// Theme to use  (WIP)
-        #[structopt(short = "t", long = "theme", takes_value = true)]
+        /// Theme to use for colored output
+        #[structopt(short = "t", long = "theme", takes_value = true, requires = "color")]
         theme:         Option<String>,
-        /// Colorize output of configuration (WIP)
-        #[structopt(short = "C", long = "color", takes_value = false)]
-        color:         Option<bool>,
+        /// Whether to color output
+        #[structopt(name = "color", short = "C", long = "color", takes_value = false)]
+        color:         bool,
+        /// Build cache for custom themes
+        #[structopt(
+            name = "cache_build",
+            short = "B", long = "cache-build",
+            takes_value = false,
+            conflicts_with_all = &["cache_clear", "convert"]
+        )]
+        cache_build:   bool,
+        /// Clear cache for custom themes
+        #[structopt(
+            name = "cache_clear",
+            short = "R", long = "cache-clear",
+            takes_value = false,
+            conflicts_with_all = &["cache_build", "convert"],
+        )]
+        cache_clear:   bool,
+        /// Source path to build or clear
+        #[structopt(
+            name = "cache_source",
+            long = "source",
+            short = "s",
+            takes_value = true,
+            requires = "cache_build"
+        )]
+        source:        Option<String>,
+        /// Destination path to build or clear
+        #[structopt(
+            name = "cache_dest",
+            long = "destination",
+            short = "d",
+            takes_value = true,
+            requires = "cache_build"
+        )]
+        dest:          Option<String>,
     },
     /// Loads all configuration for validation.
     /// If the configuration loads and builds, this command succeeds.
@@ -78,13 +110,23 @@ pub enum Command {
         /// empty.
         hoards: Vec<String>,
     },
-    /// Add to configuration file
+    /// Add item to configuration file
     Add {
         /// Add an environment to file
         #[structopt(short = "e", long = "env", group = "modify")]
-        env: Option<String>,
+        env:     Option<String>,
+        /// Add a pattern to global ignores
+        #[structopt(short = "i", long = "ignores", group = "modify")]
+        ignores: Option<String>,
     },
 }
+
+// #[allow(non_camel_case_types)]
+// #[derive(Debug, StructOpt)]
+// pub enum CacheCommands {
+//     build,
+//     clear
+// }
 
 impl Default for Command {
     fn default() -> Self {
