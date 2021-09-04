@@ -1,36 +1,46 @@
 # Hoard
 
-# TODO
+## TODO
+### Project Ideas
 * Execute command like `homemaker`?
-* Confirm this works `[[]]` in `yaml`
 * Work with the encryption
-* Global configuration as well
-* Run threads on receiver end of `WalkBuilder`
-* Ensure more tests
+* Add all options to global configuration as well
+* Run threads on the receiver end of `WalkBuilder`
 * Option to add things to configuration from the command line
-* Colorize output when converting file
+* Allow default configuration to be many formats, not just `config.toml`
+
+### Working and Compatibility
+* Ensure more tests
+* Confirm this works `[[]]` in `yaml`
 
 ## Fork
 * Convert configuration file type from `json`, `yaml`, and `toml`
+  * As of now, this new configuration that is not located in hoards default directory has to be `config.toml`
+    * When using `-c|--config` option, any format can be read
+  * Uses `-C|--color` for colored output when printing to `stdout`
+  * Uses same exact methods that `bat` does. Can specify theme with `-t|--theme`
 ```sh
 # Writes to stdout
 hoard -c config.toml config -xf json
 # Writes to file
 hoard -c config.json config -xf yaml -o new.yaml
+# Writes to stdout with colored output
+hoard -c config.yaml config -xf toml -Ct <theme>
 ```
-* Expands both '~' and environment variables in `path_exists` as well as the `hoard`'s file path
+* Has a colored help message
+* Expands both `~` and environment variables in `path_exists` as well as the `hoard`'s file path
   * Has ability to parse default variable settings that use another variable (i.e., `${ZDOTDIR:-$HOME/.config/zsh}`)
-  * Variables do not need to be surrounded by curly braces unless the default value is given
+  * Variables do not need to be surrounded by curly braces unless the default value is given (i.e., `$ZDOTDIR`)
 * `macOS` configuration directories now respect the `XDG` data structure
-* Ability to use two different file formats: `toml` or `yaml`/`yml`
+* Ability to use three different file formats: `toml` or `yaml`/`yml`, and `json`
   * Depending on the extension of the file that is given using the `-c|--config` parameter will determine which is parsed
   * If there is no extension on the file then `toml` will be used
   * Some people may find one or the other easier to read
 * Uses the crate `ignore` when walking directories
-  * This provides many more options that can be given to the user when building directory
+  * This provides **many** more options that can be given to the user when building directory
   * Note that not all of the fields need to be filled out, this is just what is available
   * Checkout `sample` directory for some configurations
-  * These are can be used like the following:
+  * These can be used like the following:
 ```toml
 [global_config]
   "ignores" = [".git/"] # Array of gitignore like patterns
@@ -44,17 +54,21 @@ hoard -c config.json config -xf yaml -o new.yaml
     "pattern"        = "*.txt"
     "regex"          = false
     "case_sensitive" = false
-    [hoards.file.config.encryption]
+    [hoards.file.config.encryption] # Work in progress
       "encrypt"      = "symmetric"
       "encrypt_pass" = "pass"
   [hoards.file.named]
     "env|unix" = "$HOME/test/file"
+  [hoards.file.another]
+    "env|unix" = "${HOME:-/Users/user}/test/file"
+  [hoards.file.evenmore]
+    "env|unix" = "${HOME:-$ZDOTDIR}/test/file"
 ```
 
 This is where a `yaml` could be more legible and less verbose
 ```yaml
 global_config:
-  ignores: [".git/"]
+  ignores: [".git/"] # Array of gitignore like patterns
 hoards:
   file:
     config:
@@ -65,14 +79,14 @@ hoards:
       pattern: "*.txt"
       regex: false
       case_sensitive: false
-      # Being worked on
-      encryption:
+      encryption: # Being worked on
         encrypt: symmetric
         encrypt_pass: lmao
     named:
       env|unix: $HOME/test/file
+    another:
+      env|unix: ${HOME:-$ZDOTDIR}/test/file
 ```
-* Has a colored help message
 
 `hoard` is a program for backing up files from across a filesystem into a single directory
 and restoring them later.
@@ -96,20 +110,38 @@ starting the file name with a dot (`.`).
 
 ### Subcommands
 
-- Backup: `hoard [flags...] backup [name] [name] [...]`
+- **Backup**: `hoard [flags...] backup [name] [name] [...]`
   - Back up the specified hoard(s). If no `name` is specified, all hoards are backed up.
-- Restore: `hoard [flags...] restore [name] [name] [...]`
+- **Restore**: `hoard [flags...] restore [name] [name] [...]`
   - Restore the specified hoard(s). If no `name` is specified, all hoards are restored.
-- Validate: `hoard [flags...] validate`
+- **Validate**: `hoard [flags...] validate`
   - Attempt to parse the default configuration file (or the one provided via `--config-file`)
     Exits with code `0` if the config is valid.
+- **Config**: `hoard [flags...] config [flags...]`
+  - Modify configuration file by changing format
+  - Display configuration file
+- **Add**: `hoard [flags...] add`
+  - Add items to configuration from command line
 
-### Flags
+### Flags for `hoard`
 
 - `--help`: View the program's help message.
 - `-V/--version`: Print the version of `hoard`.
 - `-c/--config-file`: Path to (non-default) configuration file.
 - `-h/--hoards-root`: Path to (non-default) hoards root directory.
+
+### Flags for `hoard config`
+
+- `-x/--convert`: Convert file format
+- `-i/--input-format`: Not really a necessary flag (reads from `-c/--config` option)
+- `-f/--output-format`: Format to output when converting
+- `-o/--output-file`: Format to output when converting
+- `-C/--color`: Colorize output when printing to `stdout`
+- `-t/--theme`: Theme name to use when colorizing output (found in `HOARD_`)
+- `-B/--cache-build`: Build cache directory from (`$HOME/.config/hoard/themes`)
+- `-R/--cache-clear`: Clear cache directory (`$HOME/.cache/hoard`)
+- `-s/--source`: Source path to build cache directory
+- `-d/--destination`: Destination path to build cache directory
 
 ### Verbosity
 
@@ -128,11 +160,11 @@ The default logging level is `info` for release builds and `debug` for debugging
 
 - Configuration file
   - Linux: `$XDG_CONFIG_HOME/hoard/config.toml` or `/home/$USER/.config/hoard/config.toml`
-  - macos: `$HOME/Library/Application Support/com.shadow53.hoard/`
+  - macos: `$XDG_CONFIG_HOME/hoard/config.toml` or `/Users/$USER/.config/hoard/config.toml`
   - Windows: `C:\Users\$USER\AppData\Roaming\shadow53\hoard\config.toml`
 - Hoards root
   - Linux: `$XDG_DATA_HOME/hoard/hoards` or `/home/$USER/.local/share/hoard/hoards`
-  - macos: `$HOME/Library/Application Support/com.shadow53.hoard/hoards`
+  - macos: `$XDG_DATA_HOME/hoard/hoards` or `/Users/$USER/.local/share/hoard/hoards`
   - Windows: `C:\Users\$USER\AppData\Roaming\shadow53\hoard\data\hoards`
 
 More specifically, `hoard` uses the [`directories`](https://docs.rs/directories) library,

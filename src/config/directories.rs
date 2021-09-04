@@ -1,4 +1,7 @@
-//! See [`Config`].
+//! Operations for configuration directories using [`HoardProjectDirs`]
+
+// Contains:
+// - Static [`PROJECT_DIRS`]
 use directories::{BaseDirs, ProjectDirs};
 use once_cell::sync::Lazy;
 use std::{

@@ -2,14 +2,14 @@
 //! [`Hoard`](crate::config::builder::hoard::Hoard)s. See documentation for
 //! builder `Hoard`s for more details.
 
-pub use super::builder::hoard::Config;
-use crate::{
+pub use crate::{
     checkers::history::last_paths::HoardPaths,
-    config::builder::GlobalConfig,
+    config::builder::{hoard::Config, GlobalConfig},
     utils::{
         contains_upperchar, create_temp_ignore, delete_file, osstr_to_bytes, write_temp_ignore,
     },
 };
+
 use colored::Colorize;
 use crossbeam_channel as channel;
 use ignore::{overrides::OverrideBuilder, WalkBuilder, WalkState};
@@ -118,12 +118,12 @@ impl Pile {
 
         let threads = num_cpus::get();
 
-        let conf = self.config.clone();
-        let pattern = conf.clone().map_or("*".to_string(), |p| p.walker.pattern);
-        let pattern = if conf.map(|p| p.walker.regex).unwrap() {
-            pattern
+        let config = self.config.clone().unwrap_or_else(Config::default);
+
+        let pattern = if config.walker.regex {
+            config.walker.pattern
         } else {
-            let builder = globset::GlobBuilder::new(&pattern);
+            let builder = globset::GlobBuilder::new(&config.walker.pattern);
             builder
                 .build()
                 .map_err(|e| Error::GlobError(e.to_string()))?
@@ -131,12 +131,7 @@ impl Pile {
                 .to_owned()
         };
 
-        let sensitive = self
-            .config
-            .clone()
-            .map(|p| p.walker.case_sensitive)
-            .unwrap()
-            || contains_upperchar(&pattern);
+        let sensitive = config.walker.case_sensitive || contains_upperchar(&pattern);
 
         let compiled_patt = RegexBuilder::new(&pattern)
             .case_insensitive(!sensitive)
@@ -146,13 +141,13 @@ impl Pile {
         let pattern = Arc::new(compiled_patt);
 
         let mut override_builder = OverrideBuilder::new(src);
-        for ext in &self.config.clone().map_or_else(Vec::new, |p| {
-            p.walker
-                .exclude
-                .iter()
-                .map(|v| String::from("!") + v.as_str())
-                .collect()
-        }) {
+        for ext in config
+            .walker
+            .exclude
+            .iter()
+            .map(|v| String::from("!") + v.as_str())
+            .collect::<Vec<String>>()
+        {
             override_builder
                 .add(ext.as_str())
                 .map_err(|e| Error::ExcludeError(e.to_string()))?;
@@ -161,37 +156,19 @@ impl Pile {
         let mut builder = WalkBuilder::new(src);
         builder
             .threads(threads)
-            .follow_links(
-                self.config
-                    .clone()
-                    .map(|p| p.walker.follow_links)
-                    .or(Some(false))
-                    .unwrap(),
-            )
-            .hidden(
-                self.config
-                    .clone()
-                    .map(|p| p.walker.hidden)
-                    .or(Some(true))
-                    .unwrap(),
-            )
-            .max_depth(
-                self.config
-                    .clone()
-                    .map(|p| p.walker.max_depth)
-                    .or(None)
-                    .unwrap(),
-            )
-            .overrides(
-                override_builder
-                    .build()
-                    .map_err(|e| Error::OverrideBuildError(e.to_string()))?,
-            )
+            .follow_links(config.walker.follow_links)
+            .hidden(config.walker.hidden)
+            .max_depth(config.walker.max_depth)
             .ignore(false)
             .git_global(false)
             .git_ignore(false)
             .git_exclude(false)
-            .parents(false);
+            .parents(false)
+            .overrides(
+                override_builder
+                    .build()
+                    .map_err(|e| Error::OverrideBuildError(e.to_string()))?,
+            );
 
         if let Some(ref ignore) = global.ignores {
             let tmp =

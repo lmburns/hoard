@@ -107,6 +107,15 @@ pub struct Config {
     pub walker:     Walker,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            encryption: None,
+            walker:     Walker::default(),
+        }
+    }
+}
+
 /// A single pile in the hoard.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Pile {

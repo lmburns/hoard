@@ -150,7 +150,8 @@ pub fn contains_upperchar(pattern: &str) -> bool {
 }
 
 /// Create a temporary path
-pub(crate) fn create_temp_path() -> String {
+#[must_use]
+pub fn create_temp_path() -> String {
     let mut tmp_path = env::temp_dir();
     tmp_path.push(format!(
         "{}-{}",
@@ -165,7 +166,7 @@ pub(crate) fn create_temp_path() -> String {
 }
 
 /// Write to the tempoary ignore file
-pub(crate) fn modify_temp_ignore<P: AsRef<Path>>(
+pub fn modify_temp_ignore<P: AsRef<Path>>(
     path: P,
     content: &dyn Fn(&mut File) -> Result<(), Error>,
 ) -> Result<PathBuf, Error> {
@@ -189,7 +190,7 @@ pub(crate) fn modify_temp_ignore<P: AsRef<Path>>(
 
 /// Wrapper function for `self::modify_temp_ignore` to handle errors at a higher
 /// level
-pub(crate) fn create_temp_ignore(content: &dyn Fn(&mut File) -> Result<(), Error>) -> String {
+pub fn create_temp_ignore(content: &dyn Fn(&mut File) -> Result<(), Error>) -> String {
     let tmp = create_temp_path();
     match modify_temp_ignore(&tmp, content) {
         Ok(tmp) => tmp.display().to_string(),
@@ -201,7 +202,8 @@ pub(crate) fn create_temp_ignore(content: &dyn Fn(&mut File) -> Result<(), Error
 }
 
 // Unnecessary wrap is used to propogate the correct errors
-pub(crate) fn write_temp_ignore(ignores: &[String], file: &File) -> Result<(), Error> {
+/// Write content to temporary ignore file
+pub fn write_temp_ignore(ignores: &[String], file: &File) -> Result<(), Error> {
     let mut writer = io::BufWriter::new(file);
 
     for i in ignores.iter() {
@@ -215,7 +217,7 @@ pub(crate) fn write_temp_ignore(ignores: &[String], file: &File) -> Result<(), E
 }
 
 /// Delete temporary ignore file
-pub(crate) fn delete_file<P: AsRef<Path>>(file: P) {
+pub fn delete_file<P: AsRef<Path>>(file: P) {
     let path = file.as_ref().to_path_buf();
 
     if path.exists() && path.is_file() {

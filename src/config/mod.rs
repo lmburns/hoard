@@ -1,4 +1,10 @@
 //! See [`Config`].
+
+// Contains:
+// - [`Config`] a processed configuration
+// - Runner of subcommands
+// - [`Checkers`]: check path UUID
+
 pub use self::builder::Builder;
 use self::hoard::Hoard;
 use crate::{

@@ -30,6 +30,7 @@
     bad_style,
     const_err,
     dead_code,
+    exported_private_dependencies,
     keyword_idents,
     improper_ctypes,
     macro_use_extern_crate,

@@ -1,5 +1,9 @@
 //! All operations that involve file type conversion or printing/colorizing of
-//! configuration
+//! configuration.
+
+// Contains:
+// - [`ConfigConversion`]: convert configuration filetypes
+
 pub mod assets;
 pub mod format;
 pub mod json;
