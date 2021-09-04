@@ -18,21 +18,25 @@
 //!   combination of conditions that can be used to determine where to find
 //!   files in a [`Pile`](crate::config::builder::hoard::Pile).
 
-#![deny(clippy::all)]
-#![deny(clippy::correctness)]
-#![deny(clippy::style)]
-#![deny(clippy::complexity)]
-#![deny(clippy::perf)]
-#![deny(clippy::pedantic)]
+#![deny(
+    clippy::all,
+    clippy::correctness,
+    clippy::style,
+    clippy::complexity,
+    clippy::perf,
+    clippy::pedantic
+)]
 #![deny(
     absolute_paths_not_starting_with_crate,
     anonymous_parameters,
     bad_style,
     const_err,
     dead_code,
+    ellipsis_inclusive_range_patterns,
     exported_private_dependencies,
-    keyword_idents,
+    ill_formed_attribute_input,
     improper_ctypes,
+    keyword_idents,
     macro_use_extern_crate,
     meta_variable_misuse, // May have false positives
     missing_abi,

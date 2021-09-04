@@ -15,6 +15,13 @@ use std::{
 pub static PROJECT_DIRS: Lazy<HoardProjectDirs> =
     Lazy::new(|| HoardProjectDirs::new().expect("could not get home directory"));
 
+/// Get home directory with `static PROJECT_DIRS`
+#[must_use]
+pub fn home_dir() -> Cow<'static, str> {
+    tracing::trace!("got home dir");
+    PROJECT_DIRS.home_dir().to_string_lossy()
+}
+
 /// Get config directory with `static PROJECT_DIRS`
 #[must_use]
 pub fn config_dir() -> Cow<'static, str> {
@@ -39,6 +46,7 @@ pub fn data_dir() -> Cow<'static, str> {
 /// Get the project directories for this project.
 #[derive(Debug)]
 pub struct HoardProjectDirs {
+    home_dir:   PathBuf,
     cache_dir:  PathBuf,
     config_dir: PathBuf,
     data_dir:   PathBuf,
@@ -46,6 +54,7 @@ pub struct HoardProjectDirs {
 
 impl HoardProjectDirs {
     fn new() -> Option<HoardProjectDirs> {
+        let home_dir = HoardProjectDirs::get_home_dir()?;
         let cache_dir = HoardProjectDirs::get_cache_dir()?;
         let data_dir = HoardProjectDirs::get_data_dir()?;
 
@@ -70,6 +79,7 @@ impl HoardProjectDirs {
             };
 
         Some(HoardProjectDirs {
+            home_dir,
             cache_dir,
             config_dir,
             data_dir,
@@ -77,7 +87,6 @@ impl HoardProjectDirs {
     }
 
     fn get_cache_dir() -> Option<PathBuf> {
-        // on all OS prefer BAT_CACHE_PATH if set
         let cache_dir_op = env::var_os("HOARD_CACHE_DIR").map(PathBuf::from);
         if cache_dir_op.is_some() {
             return cache_dir_op;
@@ -100,7 +109,6 @@ impl HoardProjectDirs {
     }
 
     fn get_data_dir() -> Option<PathBuf> {
-        // on all OS prefer BAT_CACHE_PATH if set
         let cache_dir_op = env::var_os("HOARD_DATA_DIR").map(PathBuf::from);
         if cache_dir_op.is_some() {
             return cache_dir_op;
@@ -122,6 +130,10 @@ impl HoardProjectDirs {
         cache_dir_op.map(|d| d.join("hoard"))
     }
 
+    fn get_home_dir() -> Option<PathBuf> {
+        BaseDirs::new().map(|p| p.home_dir().to_path_buf())
+    }
+
     /// Get cache directory
     #[must_use]
     pub fn cache_dir(&self) -> &Path {
@@ -138,6 +150,12 @@ impl HoardProjectDirs {
     #[must_use]
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    /// Get cache directory
+    #[must_use]
+    pub fn home_dir(&self) -> &Path {
+        &self.home_dir
     }
 
     /// Get all user directories (not for macOS)

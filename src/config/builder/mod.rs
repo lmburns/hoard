@@ -57,12 +57,17 @@ pub enum Error {
 #[serde(rename_all = "snake_case", default)]
 pub struct GlobalConfig {
     /// Global ignore patterns that mimic git's ignore patterns
-    pub ignores: Option<Vec<String>>, // ..super::hoard::Walker::default()
+    pub ignores:    Option<Vec<String>>,
+    /// Public GPG key
+    pub public_key: Option<String>,
 }
 
 impl Default for GlobalConfig {
     fn default() -> Self {
-        Self { ignores: None }
+        Self {
+            ignores:    None,
+            public_key: None,
+        }
     }
 }
 

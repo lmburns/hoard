@@ -2,7 +2,7 @@
 //!
 //! The only function exported from this module is [`expand_env_in_path`].
 
-use directories::BaseDirs;
+use crate::config::directories::PROJECT_DIRS;
 use std::{env, fmt, path::PathBuf};
 
 // Following the example of `std::env::set_var`, the only things disallowed are
@@ -69,11 +69,7 @@ pub fn expand_env_in_path(path: &str) -> Result<PathBuf, Error> {
         // stripped
         let no_tilde_path = new_path.strip_prefix('~').unwrap();
         if no_tilde_path.starts_with('/') || no_tilde_path.is_empty() {
-            if let Some(base) = BaseDirs::new() {
-                format!("{}{}", base.home_dir().display(), no_tilde_path)
-            } else {
-                new_path
-            }
+            format!("{}{}", PROJECT_DIRS.home_dir().display(), no_tilde_path)
         } else {
             new_path
         }
@@ -161,11 +157,7 @@ pub fn expand_env_in_path(path: &str) -> Result<PathBuf, Error> {
                     };
 
                     let var_name = &new_path[2..var_name_end_idx];
-                    tracing::trace!(
-                        "default value {:?} for environment variable {}",
-                        default_value,
-                        var_name
-                    );
+                    tracing::trace!(?default_value, %var_name);
                     match context(var_name) {
                         // if we have the variable set to some value
                         Ok(Some(var_value)) => {

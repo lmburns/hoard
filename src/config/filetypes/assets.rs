@@ -12,16 +12,7 @@ use syntect::{
 
 use super::{get_integrated_themeset, get_serialized_integrated_syntaxset, Error, Result};
 use crate::config::directories::PROJECT_DIRS;
-use colored::Colorize;
 use once_cell::sync::OnceCell;
-
-/// Expand to an error message
-#[macro_export]
-macro_rules! print_err {
-    ($($err:tt)*) => ({
-        eprintln!("{}: {}", "[hoard error]".red().bold(), format!($($err)*));
-    })
-}
 
 /// Keep it in this format since we want to load it lazily
 #[derive(Debug)]
@@ -120,7 +111,7 @@ impl HighlightAssets {
                     error: err,
                 })?;
         } else {
-            println!(
+            tracing::warn!(
                 "No themes were found in '{}', using the default set",
                 theme_dir.to_string_lossy()
             );
@@ -143,7 +134,7 @@ impl HighlightAssets {
                     error: err,
                 })?;
         } else {
-            println!(
+            tracing::warn!(
                 "No syntaxes were found in '{}', using the default set.",
                 syntax_dir.to_string_lossy()
             );
@@ -209,7 +200,7 @@ impl HighlightAssets {
             target_dir.to_string_lossy()
         );
 
-        println!("okay");
+        tracing::info!("okay");
 
         Ok(())
     }
@@ -274,7 +265,7 @@ impl HighlightAssets {
             theme
         } else {
             if !theme.is_empty() {
-                print_err!("unknown theme '{}'. Using default", theme);
+                tracing::warn!("unknown theme '{}'. Using default", theme);
             }
             &self.get_theme_set().themes
                 [self.fallback_theme.unwrap_or_else(|| Self::default_theme())]
@@ -298,7 +289,7 @@ fn asset_to_cache<T: serde::Serialize>(asset: &T, path: &Path, description: &str
         desc:  Some(description.to_string()),
         error: err.to_string(),
     })?;
-    println!("okay");
+    tracing::info!("okay");
     Ok(())
 }
 
@@ -312,9 +303,9 @@ fn asset_from_cache<T: serde::de::DeserializeOwned>(path: &Path, description: &s
 }
 
 fn clear_asset(filename: &str, description: &str) {
-    print!("Clearing {} ... ", description);
+    tracing::info!("Clearing {} ... ", description);
     fs::remove_file(PROJECT_DIRS.cache_dir().join(filename)).ok();
-    println!("okay");
+    tracing::info!("okay");
 }
 
 /// Clear syntect cache from [`XDG_DATA_HOME`] directory

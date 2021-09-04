@@ -27,6 +27,7 @@ use thiserror::Error;
 
 pub mod builder;
 pub mod directories;
+pub mod encryption;
 pub mod filetypes;
 pub mod hoard;
 // pub mod modify;

@@ -48,8 +48,12 @@ pub enum SymmetricEncryption {
 /// Configuration for asymmetric (public key) encryption.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AsymmetricEncryption {
+    /// GPG public key
     #[serde(rename = "encrypt_pub_key")]
-    public_key: String,
+    pub public_key: String,
+    /// Armored output
+    #[serde(rename = "encrypt_armor")]
+    pub armor:      Option<bool>,
 }
 
 /// Configuration for hoard/pile encryption.
@@ -279,6 +283,7 @@ mod tests {
                 config: Some(Config {
                     encryption: Some(Encryption::Asymmetric(AsymmetricEncryption {
                         public_key: "public key".to_string(),
+                        armor:      Some(true),
                     })),
                     walker:     Walker::default(),
                 }),

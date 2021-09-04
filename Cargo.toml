@@ -37,6 +37,8 @@ rand = "0.8.4"
 strum = "0.21.0"
 strum_macros = "0.21.1"
 atty = "0.2.14"
+# pgp = "0.7.2"
+gpgme = "0.10.0"
 
 [dependencies.syntect]
 version = "4.6"

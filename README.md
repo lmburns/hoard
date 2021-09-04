@@ -108,6 +108,11 @@ starting the file name with a dot (`.`).
 
 ## Usage
 
+### Environment Variables
+- `HOARD_CACHE_DIR`: directory where theme cache is stored (default: `${XDG_CACHE_HOME:-$HOME/.cache}/hoard`)
+- `HOARD_DATA_DIR`: directory where hoard history is stored (default: `${XDG_DATA_HOME:-$HOME/.local/share}/hoard`)
+- `HOARD_CONFIG_DIR`: directory where theme/hoard backups are stored (default: `${XDG_CONFIG_HOME:-$HOME/.config}/hoard`)
+
 ### Subcommands
 
 - **Backup**: `hoard [flags...] backup [name] [name] [...]`

@@ -2,6 +2,7 @@
 //! [`Hoard`](crate::config::builder::hoard::Hoard)s. See documentation for
 //! builder `Hoard`s for more details.
 
+use crate::config::encryption::configuration::GpgConfig;
 pub use crate::{
     checkers::history::last_paths::HoardPaths,
     config::builder::{hoard::Config, GlobalConfig},
@@ -222,11 +223,11 @@ impl Pile {
             });
         });
 
-        // for src in rx.iter() {
         while let Ok(src) = rx.recv() {
             tracing::trace!("Walker source: {:?}", src);
             let src_path = src.path();
 
+            // Reverses path and grabs n components away from base dir
             let dest = &mut PathBuf::from(dest);
             src_path
                 .iter()
@@ -300,6 +301,13 @@ impl Pile {
             .entered();
 
             Self::copy(self, path, prefix, global)?;
+
+            if let Some(conf) = &self.config {
+                if let Some(enc) = &conf.encryption {
+                    let j = GpgConfig::new(enc, global);
+                    println!("GPG: {:#?}", j);
+                }
+            }
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched?");
         }
