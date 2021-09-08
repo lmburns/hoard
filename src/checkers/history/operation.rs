@@ -23,7 +23,11 @@ use std::{
 };
 use thiserror::Error;
 
+/// Formated string for storing `last_paths` time
 const TIME_FORMAT_STR: &str = "%Y_%m_%d-%H_%M_%S%.6f";
+
+/// Regular expression to match a `last_paths` file name
+#[allow(clippy::expect_used)]
 static LOG_FILE_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new("^[0-9]{4}(_[0-9]{2}){2}-([0-9]{2}_){2}([0-9]{2})\\.[0-9]{6}\\.log$")
         .expect("invalid log file regex")
@@ -45,6 +49,9 @@ pub enum Error {
          with --force"
     )]
     RestoreRequired,
+    /// Non-child path of `hash_path`
+    #[error("paths in hash_path should always be children of the given root")]
+    ChildError(#[from] std::path::StripPrefixError),
 }
 
 /// A single operation log.
@@ -69,6 +76,7 @@ pub struct HoardOperation {
 impl Checker for HoardOperation {
     type Error = Error;
 
+    #[inline]
     fn new(name: &str, hoard: &ConfigHoard, is_backup: bool) -> Result<Self, Self::Error> {
         Ok(Self {
             timestamp: chrono::Utc::now(),
@@ -78,6 +86,7 @@ impl Checker for HoardOperation {
         })
     }
 
+    #[inline]
     fn check(&mut self) -> Result<(), Self::Error> {
         let _span =
             tracing::debug_span!("is_pending_operation_valid", hoard=%self.hoard_name).entered();
@@ -120,6 +129,7 @@ impl Checker for HoardOperation {
         }
     }
 
+    #[inline]
     fn commit_to_disk(self) -> Result<(), Self::Error> {
         let _span =
             tracing::trace_span!("commit_operation_to_disk", hoard=%self.hoard_name).entered();
@@ -305,7 +315,7 @@ fn hash_path(path: &Path, root: &Path) -> Result<HashMap<PathBuf, String>, Error
         let digest = Md5::digest(&bytes);
         let rel_path = path
             .strip_prefix(root)
-            .expect("paths in hash_path should always be children of the given root")
+            .map_err(Error::ChildError)?
             .to_path_buf();
         map.insert(rel_path, format!("{:x}", digest));
     } else if path.is_dir() {

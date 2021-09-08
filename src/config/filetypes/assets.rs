@@ -212,12 +212,15 @@ impl HighlightAssets {
 
     pub(crate) fn get_syntax_set(&self) -> Result<&SyntaxSet> {
         if self.syntax_set_cell.get().is_none() {
-            self.syntax_set_cell.set(
-                self.serialized_syntax_set
-                .as_ref()
-                .expect("a dev forgot to setup serialized_syntax_set, please report to https://github.com/sharkdp/bat/issues")
-                .deserialize()?
-            ).unwrap();
+            self.syntax_set_cell
+                .set(
+                    self.serialized_syntax_set
+                        .as_ref()
+                        .expect("a dev forgot to setup serialized_syntax_set")
+                        .deserialize()
+                        .map_err(|err| Error::Deserialization(err.to_string()))?,
+                )
+                .unwrap();
         }
         // It is safe to .unwrap() because we just made sure it was .filled()
         Ok(self.syntax_set_cell.get().unwrap())

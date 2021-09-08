@@ -75,7 +75,7 @@ impl HoardProjectDirs {
                 #[cfg(not(target_os = "macos"))]
                 let config_dir_op = get_dirs().config_dir().to_path_buf();
 
-                config_dir_op.map(|d| d.join("hoard"))?
+                config_dir_op.map(|d| d.join(env!("CARGO_PKG_NAME")))?
             };
 
         Some(HoardProjectDirs {
@@ -105,7 +105,7 @@ impl HoardProjectDirs {
         #[cfg(not(target_os = "macos"))]
         let cache_dir_op = get_dirs().cache_dir().to_path_buf();
 
-        cache_dir_op.map(|d| d.join("hoard"))
+        cache_dir_op.map(|d| d.join(env!("CARGO_PKG_NAME")))
     }
 
     fn get_data_dir() -> Option<PathBuf> {
@@ -127,7 +127,7 @@ impl HoardProjectDirs {
         #[cfg(not(target_os = "macos"))]
         let cache_dir_op = get_dirs().data_dir().to_path_buf();
 
-        cache_dir_op.map(|d| d.join("hoard"))
+        cache_dir_op.map(|d| d.join(env!("CARGO_PKG_NAME")))
     }
 
     fn get_home_dir() -> Option<PathBuf> {

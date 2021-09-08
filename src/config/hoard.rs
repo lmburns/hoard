@@ -2,10 +2,22 @@
 //! [`Hoard`](crate::config::builder::hoard::Hoard)s. See documentation for
 //! builder `Hoard`s for more details.
 
-use crate::config::encryption::configuration::GpgConfig;
-pub use crate::{
+#![allow(unused)]
+use crate::{
     checkers::history::last_paths::HoardPaths,
-    config::builder::{hoard::Config, GlobalConfig},
+    config::{
+        builder::{
+            hoard::{Config, Encryption},
+            GlobalConfig,
+        },
+        encrypt::{
+            fortress::{
+                append_sec_suffix, build_fortress, is_secret_file, is_special_file, Secret,
+            },
+            prelude::*,
+            types::Plaintext,
+        },
+    },
     utils::{
         contains_upperchar, create_temp_ignore, delete_file, osstr_to_bytes, write_temp_ignore,
     },
@@ -50,8 +62,8 @@ pub enum Error {
         error: io::Error,
     },
     /// Error while reading a directory or an item in a directory.
-    #[error("cannot read directory {path}: {error}")]
-    ReadDir {
+    #[error("cannot read {path}: {error}")]
+    ReadItem {
         /// The path of the file or directory to read.
         path:  PathBuf,
         /// The error that occurred while reading.
@@ -85,6 +97,15 @@ pub enum Error {
     /// Failure to parse ignore pattern
     #[error("failed to parse ignore pattern: {0}")]
     IgnorePattern(String),
+    /// Anyhow context
+    #[error("failed to obtain GPGME cryptography context")]
+    Context(#[source] anyhow::Error),
+    /// Failed encryption
+    #[error("failed to encrypt file")]
+    EncryptionFailure(#[source] anyhow::Error),
+    /// Failure to normalize path for encryption
+    #[error("failed append encryption suffix to path")]
+    AppendingSuffix(#[source] anyhow::Error),
 }
 
 /// A single path to hoard, with configuration.
@@ -118,8 +139,8 @@ impl Pile {
         .entered();
 
         let threads = num_cpus::get();
-
         let config = self.config.clone().unwrap_or_else(Config::default);
+        // tracing::trace!("Walker Config: {:#?}", config.walker.clone());
 
         let pattern = if config.walker.regex {
             config.walker.pattern
@@ -178,7 +199,11 @@ impl Pile {
             match res {
                 Some(ignore::Error::Partial(_)) | None => (),
                 Some(err) => {
-                    eprintln!("{}", Error::IgnorePattern(err.to_string()));
+                    eprintln!(
+                        "{}: {}",
+                        "Error".red().bold(),
+                        Error::IgnorePattern(err.to_string())
+                    );
                 },
             }
             delete_file(tmp);
@@ -223,6 +248,16 @@ impl Pile {
             });
         });
 
+        // Create fortress directory first for initialization
+        fs::create_dir_all(dest).map_err(|err| Error::CreateDir {
+            path:  dest.to_path_buf(),
+            error: err,
+        })?;
+
+        let (mut context, fortress, recipients) =
+            build_fortress(dest, &self.config.clone().unwrap_or_default())
+                .map_err(|err| Error::Context(err.into()))?;
+
         while let Ok(src) = rx.recv() {
             tracing::trace!("Walker source: {:?}", src);
             let src_path = src.path();
@@ -262,11 +297,47 @@ impl Pile {
                         "copying",
                     );
 
+                    // Copy all files as is
                     fs::copy(src_path.to_owned(), &dest).map_err(|err| Error::CopyFile {
                         src:   src_path.to_owned(),
                         dest:  dest.clone(),
                         error: err,
                     })?;
+
+                    // if let Some(enc) = self.config.clone().and_then(|conf|
+                    // conf.encryption) {     match enc {
+                    //         Encryption::Symmetric(e) => println!("sym:
+                    // {:#?}", e),         Encryption::
+                    // Asymmetric(e) => {
+                    // println!("asym: {:#?}", e.public_key);
+                    //         },
+                    //     }
+                    // }
+
+                    // If file is '.gpg-id' or the directory '.public-keys', do
+                    // not do anything extra
+                    // if is_special_file(&src) {
+                    //     continue;
+                    // }
+
+                    // let norm =
+                    // append_sec_suffix(&dest).map_err(Error::AppendingSuffix)?
+                    // ; let secret =
+                    // Secret::from(&fortress, norm.clone());
+                    // tracing::trace!("SECRET: {:#?}", secret);
+                    //
+                    // context
+                    //     .encrypt_file(
+                    //         &recipients,
+                    //         Plaintext::from(fs::read(&src_path).map_err(|err|
+                    // {             Error::ReadItem {
+                    //                 path:  src_path.to_path_buf(),
+                    //                 error: err,
+                    //             }
+                    //         })?),
+                    //         &norm,
+                    //     )
+                    //     .map_err(Error::EncryptionFailure)?;
                 } else {
                     tracing::warn!(
                         source = src_path.to_string_lossy().as_ref(),
@@ -300,14 +371,13 @@ impl Pile {
             )
             .entered();
 
-            Self::copy(self, path, prefix, global)?;
+            // if let Some(conf) = &self.config {
+            //     if let Some(enc) = &conf.encryption {
+            //         println!("ENCRYPT: {:#?}", enc);
+            //     }
+            // }
 
-            if let Some(conf) = &self.config {
-                if let Some(enc) = &conf.encryption {
-                    let j = GpgConfig::new(enc, global);
-                    println!("GPG: {:#?}", j);
-                }
-            }
+            Self::copy(self, path, prefix, global)?;
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched?");
         }
@@ -321,7 +391,9 @@ impl Pile {
     ///
     /// Various sorts of I/O errors as the different [`enum@Error`] variants.
     pub fn restore(&self, prefix: &Path, global: &GlobalConfig) -> Result<(), Error> {
-        // TODO: do stuff with pile config
+        // // let plain = context.decrypt_file(&path.join("aaa.txt")).expect("err
+        // // decrypting"); fs::write(&path.join("aaa.txt"),
+        // // plain.unsecure_ref()).expect("error writing");
         if let Some(path) = &self.path {
             let _span = tracing::debug_span!(
                 "restore_pile",

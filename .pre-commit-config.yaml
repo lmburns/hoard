@@ -23,10 +23,10 @@ repos:
     always_run: true
     language: system
     entry: cargo check
-  - id: cargo-clippy
-    name: cargo clippy
-    pass_filenames: false
-    language: system
-    always_run: true
-    entry: cargo clippy
-    args: ["--", "-D", "warnings"]
+  # - id: cargo-clippy
+  #   name: cargo clippy
+  #   pass_filenames: false
+  #   language: system
+  #   always_run: true
+  #   entry: cargo clippy
+  #   args: ["--", "-D", "warnings"]

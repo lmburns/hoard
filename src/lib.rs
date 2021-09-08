@@ -24,7 +24,22 @@
     clippy::style,
     clippy::complexity,
     clippy::perf,
-    clippy::pedantic
+    clippy::pedantic,
+    clippy::restriction
+)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::missing_errors_doc,
+    clippy::implicit_return,
+    clippy::missing_docs_in_private_items,
+    clippy::missing_inline_in_public_items,
+    clippy::blanket_clippy_restriction_lints,
+    clippy::create_dir,
+    clippy::else_if_without_else,
+    clippy::exhaustive_enums,
+    clippy::exhaustive_structs,
+    clippy::shadow_reuse,
+    clippy::pattern_type_mismatch
 )]
 #![deny(
     absolute_paths_not_starting_with_crate,
@@ -51,6 +66,7 @@
     patterns_in_fns_without_body,
     pointer_structural_match,
     private_in_public,
+    pub_use_of_private_extern_crate,
     semicolon_in_expressions_from_macros,
     single_use_lifetimes,
     trivial_casts,
@@ -62,6 +78,7 @@
     unused,
     unused_allocation,
     unused_comparisons,
+    // unused_crate_dependencies,
     unused_extern_crates,
     unused_import_braces,
     unused_lifetimes,
@@ -70,7 +87,7 @@
     variant_size_differences,
     while_true
 )]
-#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
+
 pub use config::Config;
 
 pub mod checkers;
@@ -78,6 +95,8 @@ pub mod combinator;
 pub mod command;
 pub mod config;
 pub mod env_vars;
+#[macro_use]
+pub mod macros;
 pub mod utils;
 
 /// The default file name of the configuration file.

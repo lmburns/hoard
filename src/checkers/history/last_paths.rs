@@ -14,10 +14,12 @@ use std::{
 };
 use thiserror::Error;
 
+/// File name in which `last_paths` are stored
 const FILE_NAME: &str = "last_paths.json";
 
 /// Errors that may occur while working with a [`LastPaths`] or related types.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// An error while parsing the JSON file.
     #[error("could not parse {}: {0}", FILE_NAME)]
@@ -53,6 +55,7 @@ fn read_last_paths_file() -> Result<fs::File, io::Error> {
 impl Checker for LastPaths {
     type Error = Error;
 
+    #[inline]
     fn new(name: &str, hoard: &Hoard, _is_backup: bool) -> Result<Self, Self::Error> {
         Ok(LastPaths({
             let mut map = HashMap::new();
@@ -61,6 +64,7 @@ impl Checker for LastPaths {
         }))
     }
 
+    #[inline]
     fn check(&mut self) -> Result<(), Self::Error> {
         let _span = tracing::debug_span!("running last_paths check", current=?self).entered();
         let (name, new_hoard) = self.0.iter().next().ok_or(Error::NoEntries)?;
@@ -73,6 +77,7 @@ impl Checker for LastPaths {
         Ok(())
     }
 
+    #[inline]
     fn commit_to_disk(self) -> Result<(), Self::Error> {
         let mut last_paths = LastPaths::from_default_file()?;
         for (name, hoard) in self.0 {
@@ -131,6 +136,7 @@ impl LastPaths {
 }
 
 impl Default for LastPaths {
+    #[inline]
     fn default() -> Self {
         Self(HashMap::new())
     }
@@ -143,13 +149,16 @@ impl Default for LastPaths {
 /// hoard.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HoardPaths {
+    /// Timestamp of `HoardPaths`
     timestamp: chrono::DateTime<chrono::Utc>,
+    /// Mapping of files to each `Pile`
     piles:     PilePaths,
 }
 
 /// Internal type for [`HoardPaths`] mapping to anonymous or named piles.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum PilePaths {
     /// A single, anonymous pile's path.
     Anonymous(Option<PathBuf>),
@@ -158,24 +167,28 @@ pub enum PilePaths {
 }
 
 impl From<PathBuf> for PilePaths {
+    #[inline]
     fn from(other: PathBuf) -> Self {
         Self::Anonymous(Some(other))
     }
 }
 
 impl From<Option<PathBuf>> for PilePaths {
+    #[inline]
     fn from(other: Option<PathBuf>) -> Self {
         Self::Anonymous(other)
     }
 }
 
 impl From<HashMap<String, PathBuf>> for PilePaths {
+    #[inline]
     fn from(other: HashMap<String, PathBuf>) -> Self {
         Self::Named(other)
     }
 }
 
 impl From<Hoard> for PilePaths {
+    #[inline]
     fn from(other: Hoard) -> Self {
         match other {
             Hoard::Anonymous(pile) => PilePaths::Anonymous(pile.path),
@@ -194,6 +207,7 @@ impl<T> From<T> for HoardPaths
 where
     T: Into<PilePaths>,
 {
+    #[inline]
     fn from(val: T) -> Self {
         Self {
             timestamp: chrono::offset::Utc::now(),
@@ -205,6 +219,7 @@ where
 impl HoardPaths {
     /// Get the timestamp of the last operation on this hoard.
     #[must_use]
+    #[inline]
     pub fn time(&self) -> &chrono::DateTime<chrono::Utc> {
         &self.timestamp
     }
@@ -214,6 +229,7 @@ impl HoardPaths {
     /// Returns `None` if the named pile is not found or if the hoard contains
     /// an anonymous pile.
     #[must_use]
+    #[inline]
     pub fn named_pile(&self, name: &str) -> Option<&PathBuf> {
         if let PilePaths::Named(named) = &self.piles {
             named.get(name)
@@ -279,6 +295,7 @@ impl HoardPaths {
     ///
     /// [`Error::HoardPathsMismatch`] if there is a difference between `old` and
     /// `new`.
+    #[allow(clippy::unwrap_in_result)]
     pub fn enforce_old_and_new_piles_are_same(old: &Self, new: &Self) -> Result<(), Error> {
         tracing::debug!("comparing old and new piles' paths");
         tracing::trace!(?old, ?new);
@@ -334,6 +351,7 @@ impl HoardPaths {
                 // Can expect because the above checks for any mismatched keys.
                 let mut mismatch = false;
                 for (key, old_path) in old {
+                    #[allow(clippy::expect_used)]
                     let new_path = new.get(key).expect("key should exist in map");
                     if old_path != new_path {
                         mismatch = true;
@@ -386,7 +404,7 @@ mod tests {
         let hoard_paths = anonymous_hoard_paths();
         let mut last_paths = LastPaths::default();
         let key = "testkey";
-        last_paths.set_hoard(key.to_string(), hoard_paths.clone());
+        last_paths.set_hoard(key.to_owned(), hoard_paths.clone());
         let got_hoard_paths = last_paths.hoard(key);
         assert_eq!(got_hoard_paths, Some(&hoard_paths));
     }

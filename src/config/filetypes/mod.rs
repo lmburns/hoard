@@ -1,5 +1,6 @@
 //! All operations that involve file type conversion or printing/colorizing of
-//! configuration.
+//! configuration. Much thanks to [`bat`] and [`refmt`] binaries. Some of this
+//! code is refactored from those crates.
 
 // Contains:
 // - [`ConfigConversion`]: convert configuration filetypes
@@ -45,7 +46,7 @@ fn get_integrated_themeset() -> ThemeSet {
 //     )
 // }
 
-/// Shorthand alias for Result using this modules's [`Errror`]
+/// Shorthand alias for Result using this modules's [`Error`]
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors found throughout the filetype conversion module

@@ -71,7 +71,7 @@ pub fn get_or_generate_uuid() -> Result<Uuid, io::Error> {
 
     if fs::metadata(&uuid_file).is_err() {
         if let Some(parent) = uuid_file.parent() {
-            fs::create_dir_all(parent).expect("unable to create directory where UUID resides");
+            fs::create_dir_all(parent)?;
         }
     }
 

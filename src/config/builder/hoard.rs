@@ -50,10 +50,19 @@ pub enum SymmetricEncryption {
 pub struct AsymmetricEncryption {
     /// GPG public key
     #[serde(rename = "encrypt_pub_key")]
-    pub public_key: String,
+    pub public_key: Option<String>,
     /// Armored output
     #[serde(rename = "encrypt_armor")]
-    pub armor:      Option<bool>,
+    pub armor:      bool,
+}
+
+impl Default for AsymmetricEncryption {
+    fn default() -> Self {
+        Self {
+            public_key: None,
+            armor:      true,
+        }
+    }
 }
 
 /// Configuration for hoard/pile encryption.
@@ -64,6 +73,17 @@ pub enum Encryption {
     Symmetric(SymmetricEncryption),
     /// Asymmetric encryption.
     Asymmetric(AsymmetricEncryption),
+}
+
+impl Encryption {
+    /// Display name for encryption type, used for tracing purposes
+    #[must_use]
+    pub fn name(&self) -> &'static str {
+        match *self {
+            Self::Symmetric(_) => "symmetric",
+            Self::Asymmetric(_) => "asymmetric",
+        }
+    }
 }
 
 /// Configuration for hoard/pile walker.
@@ -91,7 +111,7 @@ impl Default for Walker {
     fn default() -> Self {
         Self {
             follow_links:   false,
-            hidden:         true,
+            hidden:         false,
             max_depth:      None,
             exclude:        vec![],
             pattern:        "*".to_string(),
@@ -282,8 +302,8 @@ mod tests {
             let hoard = Hoard::Single(Pile {
                 config: Some(Config {
                     encryption: Some(Encryption::Asymmetric(AsymmetricEncryption {
-                        public_key: "public key".to_string(),
-                        armor:      Some(true),
+                        public_key: Some("public key".to_string()),
+                        armor:      true,
                     })),
                     walker:     Walker::default(),
                 }),

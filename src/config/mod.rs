@@ -27,7 +27,7 @@ use thiserror::Error;
 
 pub mod builder;
 pub mod directories;
-pub mod encryption;
+pub mod encrypt;
 pub mod filetypes;
 pub mod hoard;
 // pub mod modify;
@@ -72,6 +72,12 @@ pub enum Error {
     /// Error when getting config/data dirs
     #[error("invalid directory: {0}")]
     InvalidDirectory(String),
+    /// Missing `config` command to execute
+    #[error(
+        "missing `config` command. Cache must be built (`-B`) or cleared (`-R`), or a conversion \
+         must be done (`-x`)."
+    )]
+    MissingConfigCommand,
 }
 
 /// A (processed) configuration.
@@ -210,6 +216,8 @@ impl Config {
                     conversion.run().map_err(Error::from)?;
                 } else if *cache_build || *cache_clear {
                     run_cache(*cache_build, *cache_clear, source, dest)?;
+                } else {
+                    return Err(Error::MissingConfigCommand);
                 },
             Command::Validate => {
                 tracing::info!("configuration is valid");
@@ -258,7 +266,8 @@ impl Config {
 
                 checkers.commit_to_disk()?;
             },
-            Command::Add { env: _, ignores } => {
+            // TODO: finish this command
+            Command::Add { ignores, .. } => {
                 if let Some(patt) = ignores {
                     self.global_config.ignores = self
                         .global_config

@@ -3,7 +3,10 @@
 //! The only function exported from this module is [`expand_env_in_path`].
 
 use crate::config::directories::PROJECT_DIRS;
-use std::{env, fmt, path::PathBuf};
+use std::{
+    env, fmt,
+    path::{Path, PathBuf},
+};
 
 // Following the example of `std::env::set_var`, the only things disallowed are
 // the equals sign and the NUL character.
@@ -59,9 +62,9 @@ impl std::error::Error for Error {
 ///   value.
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::too_many_lines)]
-pub fn expand_env_in_path(path: &str) -> Result<PathBuf, Error> {
-    let new_path = path.to_owned();
-    let _span = tracing::debug_span!("expand_env_in_path", %path).entered();
+pub fn expand_env_in_path(path: impl AsRef<Path>) -> Result<PathBuf, Error> {
+    let new_path = path.as_ref().to_path_buf().display().to_string();
+    let _span = tracing::debug_span!("expand_env_in_path", %new_path).entered();
 
     let new_path = if new_path.starts_with('~') {
         tracing::trace!("found tilde in path {}", new_path);

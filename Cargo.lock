@@ -36,6 +36,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28ae2b3dec75a406790005a200b1bd89785afc02517a00ca99ecfe093ee9e6cf"
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,6 +373,7 @@ dependencies = [
 name = "hoard"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "atty",
  "chrono",
  "colored",
@@ -383,6 +390,7 @@ dependencies = [
  "petgraph",
  "rand",
  "regex",
+ "secstr",
  "serde",
  "serde_json",
  "serde_test",
@@ -399,6 +407,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "which",
+ "zeroize",
 ]
 
 [[package]]
@@ -856,6 +865,15 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "secstr"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cce2c726741c320e5b8f1edd9a21b3c2c292ae94514afd001d41d81ba143dafc"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "serde"
@@ -1316,3 +1334,9 @@ checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "377db0846015f7ae377174787dd452e1c5f5a9050bc6f954911d01f116daa0cd"
