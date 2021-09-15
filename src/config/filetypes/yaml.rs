@@ -12,7 +12,7 @@ pub fn serialize<V: serde::ser::Serialize>(v: V) -> Result<String, Error> {
     let serialized = serde_yaml::to_string(&v)
         .map_err(|e| Error::Serialization(e.to_string()))?
         .trim_end()
-        .to_string();
+        .to_owned();
     Ok(serialized)
 }
 

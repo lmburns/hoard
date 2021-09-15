@@ -70,6 +70,7 @@ pub fn get_tty() -> Option<PathBuf> {
 ///
 /// Panics if a depth of `SYMLINK_DEPTH_MAX` is reached to prevent infinite
 /// recursion.
+#[allow(clippy::panic)]
 fn resolve_symlink(path: &Path, depth: u8) -> Option<PathBuf> {
     if depth >= SYMLINK_MAX_DEPTH {
         panic!("failed to resolve symlink because it is too deep, possible loop?");
@@ -123,7 +124,9 @@ pub fn has_private_key(config: &Config) -> Result<bool> {
     Ok(!super::context(config)?.keys_private()?.is_empty())
 }
 
-/// Construct crypto config, respect CLI arguments.
+/// Construct crypto config, respect fields found in the configuration file.
+/// Converts [`hoard::config::builder::hoard::Config`] to
+/// [`hoard::config::encrypt::Config`]
 #[must_use]
 pub fn config(hoardconf: &HoardConfig) -> Config {
     let mut config = Config::from(ENGINE);

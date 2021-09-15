@@ -207,7 +207,7 @@ mod tests {
             let hostname = Hostname("hostname.one".into());
             let os = OperatingSystem("linux".into());
             let env_var = EnvVariable {
-                var:      "TEST_VARIABLE".to_string(),
+                var:      "TEST_VARIABLE".to_owned(),
                 expected: None,
             };
             let exe_exists = ExeExists("test".into());
@@ -240,8 +240,8 @@ mod tests {
         #[test]
         fn test_env_condition_invalid_hostname_only_and() {
             let combinator = Combinator(vec![Inner::Multiple(vec![
-                Hostname("hostname.one".to_string()),
-                Hostname("hostname.two".to_string()),
+                Hostname("hostname.one".to_owned()),
+                Hostname("hostname.two".to_owned()),
             ])]);
 
             let condition = Environment {
@@ -262,10 +262,10 @@ mod tests {
         #[test]
         fn test_env_condition_invalid_hostname_complex() {
             let combinator = Combinator(vec![
-                Inner::Single(Hostname("hostname.single".to_string())),
+                Inner::Single(Hostname("hostname.single".to_owned())),
                 Inner::Multiple(vec![
-                    Hostname("hostname.one".to_string()),
-                    Hostname("hostname.two".to_string()),
+                    Hostname("hostname.one".to_owned()),
+                    Hostname("hostname.two".to_owned()),
                 ]),
             ]);
 
@@ -286,8 +286,8 @@ mod tests {
         #[test]
         fn test_env_condition_valid_hostname() {
             let combinator = Combinator(vec![
-                Inner::Single(Hostname("hostname.one".to_string())),
-                Inner::Single(Hostname("hostname.two".to_string())),
+                Inner::Single(Hostname("hostname.one".to_owned())),
+                Inner::Single(Hostname("hostname.two".to_owned())),
             ]);
 
             let condition = Environment {
@@ -307,8 +307,8 @@ mod tests {
         #[test]
         fn test_env_condition_invalid_os_only_and() {
             let combinator = Combinator(vec![Inner::Multiple(vec![
-                OperatingSystem("windows".to_string()),
-                OperatingSystem("linux".to_string()),
+                OperatingSystem("windows".to_owned()),
+                OperatingSystem("linux".to_owned()),
             ])]);
 
             let condition = Environment {
@@ -328,10 +328,10 @@ mod tests {
         #[test]
         fn test_env_condition_invalid_os_complex() {
             let combinator = Combinator(vec![
-                Inner::Single(OperatingSystem("macos".to_string())),
+                Inner::Single(OperatingSystem("macos".to_owned())),
                 Inner::Multiple(vec![
-                    OperatingSystem("windows".to_string()),
-                    OperatingSystem("linux".to_string()),
+                    OperatingSystem("windows".to_owned()),
+                    OperatingSystem("linux".to_owned()),
                 ]),
             ]);
 
@@ -352,8 +352,8 @@ mod tests {
         #[test]
         fn test_env_condition_valid_os() {
             let combinator = Combinator(vec![
-                Inner::Single(OperatingSystem("windows".to_string())),
-                Inner::Single(OperatingSystem("linux".to_string())),
+                Inner::Single(OperatingSystem("windows".to_owned())),
+                Inner::Single(OperatingSystem("linux".to_owned())),
             ]);
 
             let condition = Environment {

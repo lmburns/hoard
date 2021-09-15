@@ -12,7 +12,8 @@ use crate::{
         },
         encrypt::{
             fortress::{
-                append_sec_suffix, build_fortress, is_secret_file, is_special_file, Secret,
+                append_sec_suffix, build_fortress, is_secret_file, is_special_file, rm_sec_suffix,
+                Secret,
             },
             prelude::*,
             types::Plaintext,
@@ -100,12 +101,21 @@ pub enum Error {
     /// Anyhow context
     #[error("failed to obtain GPGME cryptography context")]
     Context(#[source] anyhow::Error),
-    /// Failed encryption
-    #[error("failed to encrypt file")]
-    EncryptionFailure(#[source] anyhow::Error),
     /// Failure to normalize path for encryption
     #[error("failed append encryption suffix to path")]
     AppendingSuffix(#[source] anyhow::Error),
+    /// Failure to remove secret suffix of file
+    #[error("failed remove encryption suffix to path")]
+    RemovingSuffix(#[source] anyhow::Error),
+    /// Encryption failure
+    #[error("failed to encrypt file")]
+    Encrypt(#[source] anyhow::Error),
+    /// Decryption failure
+    #[error("failed to dencrypt file")]
+    Decrypt(#[source] anyhow::Error),
+    /// Error writing to a file
+    #[error("failed to write decrypted data to file")]
+    Write(#[source] std::io::Error),
 }
 
 /// A single path to hoard, with configuration.
@@ -130,7 +140,13 @@ impl Pile {
     ///
     /// Various sorts of I/O errors as the different [`Error`] variants.
     #[allow(clippy::too_many_lines)]
-    fn copy(&self, src: &Path, dest: &Path, global: &GlobalConfig) -> Result<(), Error> {
+    fn copy(
+        &self,
+        src: &Path,
+        dest: &Path,
+        global: &GlobalConfig,
+        restore: bool,
+    ) -> Result<(), Error> {
         let _span = tracing::trace_span!(
             "copy",
             source = ?src,
@@ -254,9 +270,11 @@ impl Pile {
             error: err,
         })?;
 
-        let (mut context, fortress, recipients) =
-            build_fortress(dest, &self.config.clone().unwrap_or_default())
-                .map_err(|err| Error::Context(err.into()))?;
+        let (mut context, fortress, recipients) = build_fortress(
+            if restore { src } else { dest },
+            &self.config.clone().unwrap_or_default(),
+        )
+        .map_err(|err| Error::Context(err.into()))?;
 
         while let Ok(src) = rx.recv() {
             tracing::trace!("Walker source: {:?}", src);
@@ -281,6 +299,9 @@ impl Pile {
                 } else if file_type.is_file() {
                     let _span = tracing::trace_span!("is_file").entered();
                     if let Some(parent) = dest.parent() {
+                        if is_special_file(&src) && restore {
+                            continue;
+                        }
                         tracing::trace!(
                             destination = src_path.to_string_lossy().as_ref(),
                             "ensuring parent directories for destination",
@@ -291,53 +312,76 @@ impl Pile {
                         })?;
                     }
 
-                    tracing::debug!(
-                        source = src_path.to_string_lossy().as_ref(),
-                        destination = dest.to_string_lossy().as_ref(),
-                        "copying",
-                    );
+                    println!("src ::::::: {:#?}", src_path);
+                    println!("dest ::::::: {:#?}", dest);
 
-                    // Copy all files as is
-                    fs::copy(src_path.to_owned(), &dest).map_err(|err| Error::CopyFile {
-                        src:   src_path.to_owned(),
-                        dest:  dest.clone(),
-                        error: err,
-                    })?;
+                    if let Some(enc) = self.config.clone().and_then(|conf| conf.encryption) {
+                        // If file is '.gpg-id' or the directory '.public-keys', do
+                        // not do anything extra
+                        if is_special_file(&src) {
+                            if !restore {
+                                fs::copy(src_path.to_owned(), &dest).map_err(|err| {
+                                    Error::CopyFile {
+                                        src:   src_path.to_owned(),
+                                        dest:  dest.clone(),
+                                        error: err,
+                                    }
+                                })?;
+                            }
+                            continue;
+                        }
 
-                    // if let Some(enc) = self.config.clone().and_then(|conf|
-                    // conf.encryption) {     match enc {
-                    //         Encryption::Symmetric(e) => println!("sym:
-                    // {:#?}", e),         Encryption::
-                    // Asymmetric(e) => {
-                    // println!("asym: {:#?}", e.public_key);
-                    //         },
-                    //     }
-                    // }
-
-                    // If file is '.gpg-id' or the directory '.public-keys', do
-                    // not do anything extra
-                    // if is_special_file(&src) {
-                    //     continue;
-                    // }
-
-                    // let norm =
-                    // append_sec_suffix(&dest).map_err(Error::AppendingSuffix)?
-                    // ; let secret =
-                    // Secret::from(&fortress, norm.clone());
-                    // tracing::trace!("SECRET: {:#?}", secret);
-                    //
-                    // context
-                    //     .encrypt_file(
-                    //         &recipients,
-                    //         Plaintext::from(fs::read(&src_path).map_err(|err|
-                    // {             Error::ReadItem {
-                    //                 path:  src_path.to_path_buf(),
-                    //                 error: err,
-                    //             }
-                    //         })?),
-                    //         &norm,
-                    //     )
-                    //     .map_err(Error::EncryptionFailure)?;
+                        if restore {
+                            let norm = rm_sec_suffix(&dest).map_err(Error::RemovingSuffix)?;
+                            println!("norm :: {:#?}", norm);
+                            match enc {
+                                Encryption::Symmetric(e) => {
+                                    println!("sym: {:#?}", e);
+                                },
+                                Encryption::Asymmetric(e) => {
+                                    println!("asym: {:#?}", e.public_key);
+                                    let plaintext =
+                                        context.decrypt_file(src_path).map_err(Error::Decrypt)?;
+                                    fs::write(&norm, plaintext.unsecure_ref())
+                                        .map_err(Error::Write)?;
+                                },
+                            }
+                        } else {
+                            let norm = append_sec_suffix(&dest).map_err(Error::AppendingSuffix)?;
+                            match enc {
+                                Encryption::Symmetric(e) => {
+                                    println!("sym: {:#?}", e);
+                                },
+                                Encryption::Asymmetric(e) => {
+                                    println!("asym: {:#?}", e.public_key);
+                                    context
+                                        .encrypt_file(
+                                            &recipients,
+                                            Plaintext::from(fs::read(&src_path).map_err(
+                                                |err| Error::ReadItem {
+                                                    path:  src_path.to_path_buf(),
+                                                    error: err,
+                                                },
+                                            )?),
+                                            &norm,
+                                        )
+                                        .map_err(Error::Encrypt)?;
+                                },
+                            }
+                        }
+                    } else {
+                        // Copy all files as is
+                        fs::copy(src_path.to_owned(), &dest).map_err(|err| Error::CopyFile {
+                            src:   src_path.to_owned(),
+                            dest:  dest.clone(),
+                            error: err,
+                        })?;
+                        tracing::debug!(
+                            source = src_path.to_string_lossy().as_ref(),
+                            destination = dest.to_string_lossy().as_ref(),
+                            "copying",
+                        );
+                    }
                 } else {
                     tracing::warn!(
                         source = src_path.to_string_lossy().as_ref(),
@@ -377,7 +421,7 @@ impl Pile {
             //     }
             // }
 
-            Self::copy(self, path, prefix, global)?;
+            Self::copy(self, path, prefix, global, false)?;
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched?");
         }
@@ -402,7 +446,7 @@ impl Pile {
             )
             .entered();
 
-            Self::copy(self, prefix, path, global)?;
+            Self::copy(self, prefix, path, global, true)?;
         } else {
             tracing::warn!("pile has no associated path -- perhaps no environment matched");
         }

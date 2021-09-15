@@ -289,7 +289,7 @@ fn asset_to_cache<T: serde::Serialize>(asset: &T, path: &Path, description: &str
     print!("Writing {} to {} ... ", description, path.to_string_lossy());
     syntect::dumps::dump_to_file(asset, &path).map_err(|err| Error::WriteFile {
         file:  path.to_string_lossy().to_string(),
-        desc:  Some(description.to_string()),
+        desc:  Some(description.to_owned()),
         error: err.to_string(),
     })?;
     tracing::info!("okay");
@@ -299,7 +299,7 @@ fn asset_to_cache<T: serde::Serialize>(asset: &T, path: &Path, description: &str
 fn asset_from_cache<T: serde::de::DeserializeOwned>(path: &Path, description: &str) -> Result<T> {
     let contents = fs::read(path).map_err(|err| Error::ReadFile {
         file:  path.to_string_lossy().to_string(),
-        desc:  Some(description.to_string()),
+        desc:  Some(description.to_owned()),
         error: err,
     })?;
     from_reader(&contents[..]).map_err(|err| Error::SyntectGeneral(err.to_string()))

@@ -71,7 +71,7 @@ impl FromStr for ConfigFormat {
             "json" => Ok(ConfigFormat::Json),
             "toml" => Ok(ConfigFormat::Toml),
             "yaml" | "yml" => Ok(ConfigFormat::Yaml),
-            e => Err(Error::InvalidFormat(e.to_string())),
+            e => Err(Error::InvalidFormat(e.to_owned())),
         }
     }
 }

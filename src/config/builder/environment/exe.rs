@@ -23,7 +23,12 @@ impl TryInto<bool> for ExeExists {
             Err(err) => match err {
                 // AFAICT, this error is the "exe not found" one.
                 which::Error::CannotFindBinaryPath => Ok(false),
-                err => Err(err),
+                err
+                @
+                (which::Error::BadAbsolutePath
+                | which::Error::BadRelativePath
+                | which::Error::CannotGetCurrentDir
+                | which::Error::CannotCanonicalize) => Err(err),
             },
         }
     }
@@ -55,7 +60,7 @@ mod tests {
     #[test]
     fn test_exe_exists() {
         for exe in &EXE_NAMES {
-            let exists: bool = ExeExists((*exe).to_string())
+            let exists: bool = ExeExists((*exe).to_owned())
                 .try_into()
                 .expect("failed to check if exe exists");
 

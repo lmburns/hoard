@@ -25,6 +25,7 @@ pub enum Error {
 
 /// Return `Context` from `gpgme` which this whole module is based off of
 pub fn context(config: &Config) -> Result<Context> {
+    // TODO: only call once
     let _span = tracing::trace_span!("setting gpgme context");
     if config.gpg_tty && !utils::has_gpg_tty() {
         if let Some(tty) = utils::get_tty() {
@@ -79,6 +80,10 @@ impl ImplContext for Context {
 
     fn can_decrypt(&mut self, sectext: Sectext) -> Result<bool> {
         gpg::can_decrypt(&mut self.context, &sectext)
+    }
+
+    fn user_emails(&mut self) -> Result<Vec<String>> {
+        gpg::user_emails(&mut self.context)
     }
 
     fn keys_public(&mut self) -> Result<Vec<Key>> {

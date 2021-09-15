@@ -144,6 +144,7 @@ pub fn osstr_to_bytes(input: &OsStr) -> Cow<[u8]> {
 /// Match uppercase characters against Unicode characters as well. Tags can also
 /// be any valid Unicode character
 pub fn contains_upperchar(pattern: &str) -> bool {
+    #[allow(clippy::unwrap_used)]
     static UPPER_REG: Lazy<Regex> = Lazy::new(|| Regex::new(r"[[:upper:]]").unwrap());
     let cow_pat: Cow<OsStr> = Cow::Owned(OsString::from(pattern));
     UPPER_REG.is_match(&osstr_to_bytes(cow_pat.as_ref()))

@@ -109,13 +109,13 @@ impl<'a> Evaluation<'a> {
                         .iter()
                         .zip(other.scores.iter())
                         .map(|(s, o)| match s.cmp(o) {
-                            std::cmp::Ordering::Less => -1,
-                            std::cmp::Ordering::Equal => 0,
-                            std::cmp::Ordering::Greater => 1,
+                            std::cmp::Ordering::Less => -1_i32,
+                            std::cmp::Ordering::Equal => 0_i32,
+                            std::cmp::Ordering::Greater => 1_i32,
                         })
                         .sum();
 
-                    match rel_score.cmp(&0) {
+                    match rel_score.cmp(&0_i32) {
                         std::cmp::Ordering::Less => Ok(false),
                         std::cmp::Ordering::Greater => Ok(true),
                         std::cmp::Ordering::Equal => {
@@ -225,7 +225,12 @@ impl Node {
                                     format!("{}|{}", self.name, right)
                                 },
                             )),
-                        _ => return Err(err),
+                        Error::DoubleDefine(..)
+                        | Error::EnvironmentNotExist(_)
+                        | Error::NoEnvironments
+                        | Error::WeightCycle(_)
+                        | Error::EmptyEnvironment(_)
+                        | Error::CombinedMutuallyExclusive(_) => return Err(err),
                     },
                 };
 
@@ -440,7 +445,7 @@ impl EnvTrie {
                 // Reverse-build a linked list
                 tracing::trace!("building environment tree");
                 for segment in envs.into_iter().rev() {
-                    let segment = segment.to_string();
+                    let segment = segment.to_owned();
 
                     prev_node.score = weighted_map.get(&segment).copied().unwrap_or(1);
                     prev_node.name = segment.clone();

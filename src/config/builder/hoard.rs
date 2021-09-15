@@ -114,7 +114,7 @@ impl Default for Walker {
             hidden:         false,
             max_depth:      None,
             exclude:        vec![],
-            pattern:        "*".to_string(),
+            pattern:        "*".to_owned(),
             regex:          false,
             case_sensitive: false,
         }
@@ -283,7 +283,7 @@ mod tests {
             let hoard = Hoard::Single(Pile {
                 config: None,
                 items:  hashmap! {
-                    "bar_env|foo_env".to_string() => "/some/path".to_string()
+                    "bar_env|foo_env".to_owned() => "/some/path".to_owned()
                 },
             });
 
@@ -302,13 +302,13 @@ mod tests {
             let hoard = Hoard::Single(Pile {
                 config: Some(Config {
                     encryption: Some(Encryption::Asymmetric(AsymmetricEncryption {
-                        public_key: Some("public key".to_string()),
+                        public_key: Some("public key".to_owned()),
                         armor:      true,
                     })),
                     walker:     Walker::default(),
                 }),
                 items:  hashmap! {
-                    "bar_env|foo_env".to_string() => "/some/path".to_string()
+                    "bar_env|foo_env".to_owned() => "/some/path".to_owned()
                 },
             });
 
@@ -333,10 +333,10 @@ mod tests {
             let hoard = Hoard::Multiple(MultipleEntries {
                 config: None,
                 items:  hashmap! {
-                    "item1".to_string() => Pile {
+                    "item1".to_owned() => Pile {
                         config: None,
                         items: hashmap! {
-                            "bar_env|foo_env".to_string() => "/some/path".to_string()
+                            "bar_env|foo_env".to_owned() => "/some/path".to_owned()
                         }
                     },
                 },
@@ -367,10 +367,10 @@ mod tests {
                     walker:     Walker::default(),
                 }),
                 items:  hashmap! {
-                    "item1".to_string() => Pile {
+                    "item1".to_owned() => Pile {
                         config: None,
                         items: hashmap! {
-                            "bar_env|foo_env".to_string() => "/some/path".to_string()
+                            "bar_env|foo_env".to_owned() => "/some/path".to_owned()
                         }
                     },
                 },

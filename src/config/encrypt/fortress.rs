@@ -12,7 +12,7 @@ use anyhow::Result;
 use ignore::WalkBuilder;
 use thiserror::Error;
 
-use crate::config::builder::hoard::Config as HoardConfig;
+use crate::config::builder::hoard::{Config as HoardConfig, Encryption};
 
 use super::{
     prelude::*, recipients::Recipients, selection::select_key, types::Plaintext, utils, Config,
@@ -126,7 +126,6 @@ pub fn fortress_public_keys_dir(fortress: &Fortress) -> PathBuf {
 
 /// Normalizes a path, returning encrypted suffix file name
 pub fn append_sec_suffix<P: AsRef<Path>>(target: P) -> Result<PathBuf> {
-    // Take target as base path
     let mut path = PathBuf::from(target.as_ref());
 
     // Add secret extension if non existent
@@ -135,6 +134,26 @@ pub fn append_sec_suffix<P: AsRef<Path>>(target: P) -> Result<PathBuf> {
         let mut tmp = path.as_os_str().to_owned();
         tmp.push(SECRET_SUFFIX);
         path = PathBuf::from(tmp);
+    }
+
+    Ok(path)
+}
+
+/// Normalizes a path, removing encrypted suffix file name
+pub fn rm_sec_suffix<P: AsRef<Path>>(target: P) -> Result<PathBuf> {
+    let mut path = PathBuf::from(target.as_ref());
+
+    // Add secret extension if non existent
+    let ext: OsString = SECRET_SUFFIX.trim_start_matches('.').into();
+
+    if path.extension() == Some(&ext) {
+        if let Some(stem) = path.file_stem() {
+            if let Some(parent) = path.parent() {
+                path = parent.join(stem);
+            } else {
+                path = PathBuf::from(stem);
+            }
+        }
     }
 
     Ok(path)
@@ -190,7 +209,6 @@ pub fn fortress_load_keys(fortress: &Fortress) -> Result<Vec<Key>> {
     let fingerprints = fortress_read_gpg_fingerprints(fortress)?;
 
     if !fingerprints.is_empty() {
-        // tracing::trace!("");
         let mut context = super::context(&Config::default())?;
         let fingerprints: Vec<_> = fingerprints.iter().map(String::as_str).collect();
         keys.extend(context.find_public_keys(&fingerprints)?);
@@ -334,7 +352,7 @@ impl Secret {
             .ok()
             .and_then(Path::to_str)
             .map_or_else(|| "?", |f| f.trim_end_matches(SECRET_SUFFIX))
-            .to_string();
+            .to_owned();
         Self { name, path }
     }
 
@@ -431,6 +449,11 @@ pub fn is_special_file(entry: &ignore::DirEntry) -> bool {
             .to_string_lossy()
             .to_string()
             .contains(FORTRESS_PUB_KEY) // prevent traversal into directory
+        || entry
+            .path()
+            .parent()
+            .map(|f| f.to_string_lossy().to_string())
+            .map_or(false, |f| f == FORTRESS_PUB_KEY)
 }
 
 /// Check if given `WalkDir` `DirEntry` is hidden sub-directory.
@@ -485,24 +508,38 @@ pub fn build_fortress(
 
     let mut context = utils::context(config).map_err(|err| Error::Context(err.into()))?;
 
-    println!("keys: {:#?}", context.keys_private());
-
     if utils::check_existing_fortress(src).is_ok() {
-        // TODO: If hidden is off and this is on, = error
         let mut tmp = Recipients::from(context.keys_private().map_err(Error::NoPrivateKeys)?);
-
         tmp.remove_all(recipients.keys());
-        let key = select_key(
-            tmp.keys(),
-            Some(
-                "Select key:
-",
-            ),
-        )
-        .ok_or(Error::NoKeySelected)?;
+
+        let key = if let Some(Encryption::Asymmetric(enc)) = config.clone().encryption {
+            if let Some(public) = enc.public_key {
+                let public = public
+                    .trim()
+                    .strip_prefix("0x")
+                    .unwrap_or_else(|| public.trim());
+
+                if let Some(key) = tmp.keys().iter().find(|key| {
+                    public == key.fingerprint(false)
+                        || public == key.fingerprint(true)
+                        || context
+                            .user_emails()
+                            .iter()
+                            .any(|emails| emails.iter().any(|email| email == public))
+                }) {
+                    key
+                } else {
+                    select_key(tmp.keys(), None).ok_or(Error::NoKeySelected)?
+                }
+            } else {
+                select_key(tmp.keys(), None).ok_or(Error::NoKeySelected)?
+            }
+        } else {
+            select_key(tmp.keys(), None).ok_or(Error::NoKeySelected)?
+        };
 
         recipients.add(key.clone());
-        recipients.save(&fortress).expect("error saving");
+        recipients.save(&fortress).expect("error saving fortress");
     };
 
     Ok((context, fortress, recipients))

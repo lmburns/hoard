@@ -12,6 +12,8 @@
 ### Working and Compatibility
 * Ensure more tests
 * Confirm this works `[[]]` in `yaml`
+* Allow encryption key from configuration file
+* Symmetric encryption
 
 ## Fork
 * Convert configuration file type from `json`, `yaml`, and `toml`
@@ -36,6 +38,11 @@ hoard -c config.yaml config -xf toml -Ct <theme>
   * Depending on the extension of the file that is given using the `-c|--config` parameter will determine which is parsed
   * If there is no extension on the file then `toml` will be used
   * Some people may find one or the other easier to read
+* Can set the key to be used for encryption within the configuration file
+  * Can use and of the following, and if none are used or the keys don't match, a prompt will ask you which to use:
+    * long fingerprint (optional `0x` prefix)
+    * short fingerprint (optional `0x` prefix)
+    * email
 * Uses the crate `ignore` when walking directories
   * This provides **many** more options that can be given to the user when building directory
   * Note that not all of the fields need to be filled out, this is just what is available
@@ -55,8 +62,11 @@ hoard -c config.yaml config -xf toml -Ct <theme>
     "regex"          = false
     "case_sensitive" = false
     [hoards.file.config.encryption] # Work in progress
-      "encrypt"      = "symmetric"
-      "encrypt_pass" = "pass"
+      "encrypt"      = "asymmetric"
+      # Any of the 3 options can be used
+      "encrypt_pub_key" = "E93ACCAAAEB024788C106EDEC011CBEF6628B679" # long fingerprint
+      "encrypt_pub_key" = "0xC011CBEF6628B679"                       # short fingerprint
+      "encrypt_pub_key" = "lmb@lmburns.com"                          # email
   [hoards.file.named]
     "env|unix" = "$HOME/test/file"
   [hoards.file.another]
@@ -80,8 +90,10 @@ hoards:
       regex: false
       case_sensitive: false
       encryption: # Being worked on
-        encrypt: symmetric
-        encrypt_pass: lmao
+        encrypt: asymmetric
+        encrypt_pub_key: E93ACCAAAEB024788C106EDEC011CBEF6628B679 # long fingerprint
+        encrypt_pub_key: 0xC011CBEF6628B679                       # short fingerprint (optional '0x' prefix)
+        encrypt_pub_key: lmb@lmburns.com                          # email
     named:
       env|unix: $HOME/test/file
     another:

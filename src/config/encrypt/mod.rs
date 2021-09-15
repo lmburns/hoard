@@ -64,8 +64,10 @@ pub struct Config {
     pub engine:  Engine,
     /// `TTY` usage option (i.e., `loopback` mode)
     pub gpg_tty: bool,
-    /// `--armor` usage option
+    /// Use armored encryption
     pub armor:   bool,
+    /// Secret key fingerprint to use
+    pub sec_key: Option<String>,
 }
 
 impl Default for Config {
@@ -74,6 +76,7 @@ impl Default for Config {
             engine:  Engine::Gpg,
             gpg_tty: false,
             armor:   true,
+            sec_key: None,
         }
     }
 }
@@ -89,7 +92,7 @@ impl Config {
     }
 }
 
-/// Representation of `Engine` key
+/// Representation of the [`protocol`]'s key
 #[derive(Clone, PartialEq, Debug)]
 #[non_exhaustive]
 pub enum Key {
@@ -182,6 +185,11 @@ impl ImplContext for Context {
         self.context.can_decrypt(sectext)
     }
 
+    /// Return a vector of user emails
+    fn user_emails(&mut self) -> Result<Vec<String>> {
+        self.context.user_emails()
+    }
+
     /// Return a vector of public keys
     fn keys_public(&mut self) -> Result<Vec<Key>> {
         self.context.keys_public()
@@ -239,6 +247,9 @@ pub trait ImplContext {
     fn can_decrypt_file(&mut self, path: &Path) -> Result<bool> {
         self.can_decrypt(fs::read(path).map_err(Error::ReadFile)?.into())
     }
+
+    /// Obtain user emails
+    fn user_emails(&mut self) -> Result<Vec<String>>;
 
     /// Obtain all public keys from keychain
     fn keys_public(&mut self) -> Result<Vec<Key>>;

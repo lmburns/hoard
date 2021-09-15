@@ -55,7 +55,7 @@ mod tests {
     #[serial_test::serial]
     fn test_display_env_no_value() {
         let env = EnvVariable {
-            var:      "TESTING_VAR".to_string(),
+            var:      "TESTING_VAR".to_owned(),
             expected: None,
         };
         assert_eq!("ENV ${TESTING_VAR} IS SET", env.to_string());
@@ -65,8 +65,8 @@ mod tests {
     #[serial_test::serial]
     fn test_display_env_with_value() {
         let env = EnvVariable {
-            var:      "TESTING_VAR".to_string(),
-            expected: Some("testing value".to_string()),
+            var:      "TESTING_VAR".to_owned(),
+            expected: Some("testing value".to_owned()),
         };
         assert_eq!("ENV ${TESTING_VAR} == \"testing value\"", env.to_string());
     }

@@ -125,6 +125,30 @@ pub fn private_keys(context: &mut Context) -> Result<Vec<KeyId>> {
         .collect())
 }
 
+/// Access emails within the keychain
+pub fn user_emails(context: &mut Context) -> Result<Vec<String>> {
+    let mut emails = vec![];
+    context
+        .secret_keys()?
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(Key::can_encrypt)
+        .map(|key| {
+            key.user_ids()
+                .map(|k| {
+                    if let Ok(email) = k.email() {
+                        if !email.trim().is_empty() {
+                            emails.push(email.to_owned());
+                        }
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .for_each(drop);
+
+    Ok(emails)
+}
+
 /// Import given key from bytes into keychain.
 ///
 /// - `context`: GPGME context
@@ -193,7 +217,7 @@ impl From<Key> for KeyId {
         Self(
             key.fingerprint()
                 .expect("GPGME key does not have fingerprint")
-                .to_string(),
+                .to_owned(),
             key.user_ids()
                 .map(|user| {
                     let mut parts = vec![];

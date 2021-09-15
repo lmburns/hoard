@@ -237,7 +237,7 @@ impl Config {
                     hoard
                         .backup(&prefix, &self.global_config)
                         .map_err(|error| Error::Backup {
-                            name: name.to_string(),
+                            name: name.to_owned(),
                             error,
                         })?;
                 }
@@ -259,7 +259,7 @@ impl Config {
                     hoard
                         .restore(&prefix, &self.global_config)
                         .map_err(|error| Error::Restore {
-                            name: name.to_string(),
+                            name: name.to_owned(),
                             error,
                         })?;
                 }
@@ -305,8 +305,8 @@ impl Checkers {
         for (name, hoard) in hoard_map {
             let lp = LastPaths::new(name, hoard, is_backup)?;
             let op = HoardOperation::new(name, hoard, is_backup)?;
-            last_paths.insert((*name).to_string(), lp);
-            operations.insert((*name).to_string(), op);
+            last_paths.insert((*name).to_owned(), lp);
+            operations.insert((*name).to_owned(), op);
         }
 
         Ok(Self {

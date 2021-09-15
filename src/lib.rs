@@ -20,26 +20,41 @@
 
 #![deny(
     clippy::all,
-    clippy::correctness,
-    clippy::style,
     clippy::complexity,
-    clippy::perf,
+    clippy::correctness,
     clippy::pedantic,
-    clippy::restriction
+    clippy::perf,
+    clippy::restriction,
+    clippy::style
 )]
 #![allow(
-    clippy::module_name_repetitions,
-    clippy::missing_errors_doc,
-    clippy::implicit_return,
-    clippy::missing_docs_in_private_items,
-    clippy::missing_inline_in_public_items,
+    clippy::string_add,
     clippy::blanket_clippy_restriction_lints,
+    clippy::filetype_is_file,
     clippy::create_dir,
     clippy::else_if_without_else,
     clippy::exhaustive_enums,
     clippy::exhaustive_structs,
+    clippy::exit,
+    clippy::implicit_return,
+    clippy::indexing_slicing,
+    clippy::integer_arithmetic,
+    clippy::integer_division,
+    clippy::missing_docs_in_private_items,
+    clippy::missing_errors_doc,
+    clippy::missing_inline_in_public_items,
+    clippy::module_name_repetitions,
+    clippy::pattern_type_mismatch,
     clippy::shadow_reuse,
-    clippy::pattern_type_mismatch
+
+    // Need to be fixed
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic_in_result_fn,
+    clippy::unreachable,
+    clippy::unwrap_in_result,
+    clippy::expect_fun_call,
+    clippy::unimplemented,
 )]
 #![deny(
     absolute_paths_not_starting_with_crate,
@@ -86,6 +101,19 @@
     unused_qualifications,
     variant_size_differences,
     while_true
+)]
+// clippy::blacklisted_name,
+#![cfg_attr(
+    any(test),
+    allow(
+        clippy::expect_fun_call,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::panic_in_result_fn,
+        clippy::unwrap_in_result,
+        clippy::unwrap_used,
+        clippy::wildcard_enum_match_arm,
+    )
 )]
 
 pub use config::Config;
