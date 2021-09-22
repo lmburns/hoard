@@ -7,7 +7,7 @@ use crate::{
     checkers::history::last_paths::HoardPaths,
     config::{
         builder::{
-            hoard::{Config, Encryption},
+            hoard::{Config, Encryption, SymmetricEncryption},
             GlobalConfig,
         },
         encrypt::{
@@ -19,14 +19,17 @@ use crate::{
             types::Plaintext,
         },
     },
+    hoard_error, hoard_warn,
     utils::{
-        contains_upperchar, create_temp_ignore, delete_file, osstr_to_bytes, write_temp_ignore,
+        contains_upperchar, create_temp_ignore, delete_file, osstr_to_bytes, recursively_set_perms,
+        write_temp_ignore,
     },
 };
 
 use colored::Colorize;
 use crossbeam_channel as channel;
 use ignore::{overrides::OverrideBuilder, WalkBuilder, WalkState};
+use rayon::prelude::*;
 use regex::bytes::RegexBuilder;
 use std::{
     borrow::Cow,
@@ -155,7 +158,7 @@ impl Pile {
         .entered();
 
         let threads = num_cpus::get();
-        let config = self.config.clone().unwrap_or_else(Config::default);
+        let config = self.config.clone().unwrap_or_default();
         // tracing::trace!("Walker Config: {:#?}", config.walker.clone());
 
         let pattern = if config.walker.regex {
@@ -215,11 +218,7 @@ impl Pile {
             match res {
                 Some(ignore::Error::Partial(_)) | None => (),
                 Some(err) => {
-                    eprintln!(
-                        "{}: {}",
-                        "Error".red().bold(),
-                        Error::IgnorePattern(err.to_string())
-                    );
+                    hoard_error!("{}", Error::IgnorePattern(err.to_string()));
                 },
             }
             delete_file(tmp);
@@ -237,7 +236,7 @@ impl Pile {
                     let entry = match res {
                         Ok(d) => d,
                         Err(e) => {
-                            eprintln!("{}: {}", "Warning".yellow().bold(), &e);
+                            hoard_warn!("{}", &e);
                             return WalkState::Continue;
                         },
                     };
@@ -264,7 +263,7 @@ impl Pile {
             });
         });
 
-        // Create fortress directory first for initialization
+        // Create fortress directory first for initialization of encryption
         fs::create_dir_all(dest).map_err(|err| Error::CreateDir {
             path:  dest.to_path_buf(),
             error: err,
@@ -312,8 +311,8 @@ impl Pile {
                         })?;
                     }
 
-                    println!("src ::::::: {:#?}", src_path);
-                    println!("dest ::::::: {:#?}", dest);
+                    // tracing::debug!("source :: {:#?}", src_path);
+                    // tracing::debug!("destination :: {:#?}", dest);
 
                     if let Some(enc) = self.config.clone().and_then(|conf| conf.encryption) {
                         // If file is '.gpg-id' or the directory '.public-keys', do
@@ -335,8 +334,18 @@ impl Pile {
                             let norm = rm_sec_suffix(&dest).map_err(Error::RemovingSuffix)?;
                             println!("norm :: {:#?}", norm);
                             match enc {
-                                Encryption::Symmetric(e) => {
-                                    println!("sym: {:#?}", e);
+                                Encryption::Symmetric(e) => match e {
+                                    SymmetricEncryption::Password(pass) => {
+                                        println!("pass: {:#?}", pass);
+                                        let plaintext = context
+                                            .decrypt_file(src_path)
+                                            .map_err(Error::Decrypt)?;
+                                        fs::write(&norm, plaintext.unsecure_ref())
+                                            .map_err(Error::Write)?;
+                                    },
+                                    SymmetricEncryption::PasswordCmd(pass_cmd) => {
+                                        println!("pass cmd: {:#?}", pass_cmd);
+                                    },
                                 },
                                 Encryption::Asymmetric(e) => {
                                     println!("asym: {:#?}", e.public_key);
@@ -348,23 +357,29 @@ impl Pile {
                             }
                         } else {
                             let norm = append_sec_suffix(&dest).map_err(Error::AppendingSuffix)?;
+                            let plaintext =
+                                Plaintext::from(fs::read(&src_path).map_err(|err| {
+                                    Error::ReadItem {
+                                        path:  src_path.to_path_buf(),
+                                        error: err,
+                                    }
+                                })?);
                             match enc {
-                                Encryption::Symmetric(e) => {
-                                    println!("sym: {:#?}", e);
+                                Encryption::Symmetric(e) => match e {
+                                    SymmetricEncryption::Password(pass) => {
+                                        println!("pass: {:#?}", pass);
+                                        context
+                                            .encrypt_file_symmetric(plaintext, &norm)
+                                            .map_err(Error::Encrypt)?;
+                                    },
+                                    SymmetricEncryption::PasswordCmd(pass_cmd) => {
+                                        println!("pass cmd: {:#?}", pass_cmd);
+                                    },
                                 },
                                 Encryption::Asymmetric(e) => {
                                     println!("asym: {:#?}", e.public_key);
                                     context
-                                        .encrypt_file(
-                                            &recipients,
-                                            Plaintext::from(fs::read(&src_path).map_err(
-                                                |err| Error::ReadItem {
-                                                    path:  src_path.to_path_buf(),
-                                                    error: err,
-                                                },
-                                            )?),
-                                            &norm,
-                                        )
+                                        .encrypt_file(&recipients, plaintext, &norm)
                                         .map_err(Error::Encrypt)?;
                                 },
                             }

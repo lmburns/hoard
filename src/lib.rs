@@ -89,7 +89,6 @@
     unaligned_references,
     unconditional_recursion,
     unreachable_pub,
-    unsafe_code,
     unused,
     unused_allocation,
     unused_comparisons,

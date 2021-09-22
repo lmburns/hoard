@@ -4,6 +4,7 @@ use std::{
     ffi::OsString,
     fs,
     io::Write,
+    os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
 };
 
@@ -12,22 +13,25 @@ use anyhow::Result;
 use ignore::WalkBuilder;
 use thiserror::Error;
 
-use crate::config::builder::hoard::{Config as HoardConfig, Encryption};
+use crate::{
+    config::builder::hoard::{Config as HoardConfig, Encryption},
+    utils::recursively_set_perms,
+};
 
 use super::{
     prelude::*, recipients::Recipients, selection::select_key, types::Plaintext, utils, Config,
-    Context, ContextPool, Engine, Key,
+    Context, ContextPool, Engine, Key, FORTRESS_UMASK,
 };
 
 // TODO: choose
 /// Encryption filename suffix
 pub const SECRET_SUFFIX: &str = ".gpg";
-
 /// Fortress file to store `gpg` id
 pub const FORTRESS_GPG_ID: &str = ".gpg-id";
-
 /// Fortress directory name where public keys are stored
 pub const FORTRESS_PUB_KEY: &str = ".public-keys/";
+/// Engine used for encryption within the fortress
+pub const FORTRESS_ENGINE: Engine = Engine::Gpg;
 
 /// Fortress encryption error
 #[derive(Debug, Error)]
@@ -51,11 +55,9 @@ pub enum Error {
     /// error message)
     #[error("")]
     SpecialFile(#[source] anyhow::Error),
-
     /// Tar
     #[error("cannot use directory as target without name hint")]
     TargetDirWithoutNamehint(PathBuf),
-
     /// Anyhow context
     #[error("failed to obtain GPGME cryptography context")]
     Context(#[source] anyhow::Error),
@@ -112,7 +114,7 @@ impl Fortress {
     }
 }
 
-/// Return GPG ID file for afortress
+/// Return GPG ID file for a fortress
 #[must_use]
 pub fn fortress_gpg_ids_file(fortress: &Fortress) -> PathBuf {
     fortress.root.join(FORTRESS_GPG_ID)
@@ -125,6 +127,9 @@ pub fn fortress_public_keys_dir(fortress: &Fortress) -> PathBuf {
 }
 
 /// Normalizes a path, returning encrypted suffix file name
+/// This function is specific to `SECRET_SUFFIX` compared to the other mentioned
+/// below that is a generalized function
+// NOTE: Similar function .. config::encrypt::utils::append_file_name
 pub fn append_sec_suffix<P: AsRef<Path>>(target: P) -> Result<PathBuf> {
     let mut path = PathBuf::from(target.as_ref());
 
@@ -189,13 +194,20 @@ fn read_fingerprints<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
 
 /// Write fingerprints to the given file.
 fn write_fingerprints<P: AsRef<Path>, S: AsRef<str>>(path: P, fingerprints: &[S]) -> Result<()> {
-    fs::write(
-        path,
+    let mut file = fs::OpenOptions::new()
+        .mode(0o666 - (0o666 & *FORTRESS_UMASK))
+        .truncate(true)
+        .write(true)
+        .create(true)
+        .open(&path)?;
+
+    file.write_all(
         fingerprints
             .iter()
             .map(AsRef::as_ref)
             .collect::<Vec<_>>()
-            .join("\n"),
+            .join("\n")
+            .as_bytes(),
     )
     .map_err(|err| Error::WriteFile(err).into())
 }
@@ -233,7 +245,7 @@ pub fn fortress_save_keys(fortress: &Fortress, keys: &[Key]) -> Result<()> {
     // Save GPG keys
     let gpg_fingerprints: Vec<_> = keys
         .iter()
-        .filter(|key| key.protocol() == Engine::Gpg)
+        .filter(|key| key.protocol() == FORTRESS_ENGINE)
         .map(|key| key.fingerprint(false))
         .collect();
     fortress_write_gpg_fingerprints(fortress, &gpg_fingerprints)?;
@@ -263,6 +275,7 @@ pub fn fortress_sync_public_key_files(fortress: &Fortress, keys: &[Key]) -> Resu
     // Get public keys directory, ensure it exists
     let dir = fortress_public_keys_dir(fortress);
     fs::create_dir_all(&dir).map_err(Error::SyncKeyFiles)?;
+    recursively_set_perms(&dir, fortress)?;
 
     // List key files in keys directory
     let files: Vec<(PathBuf, String)> = dir

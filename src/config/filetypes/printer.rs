@@ -19,14 +19,8 @@ pub trait Printer {
 }
 
 /// Empty struct with no Style or Color associated with it
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PlainTextPrinter {}
-
-impl Default for PlainTextPrinter {
-    fn default() -> Self {
-        PlainTextPrinter {}
-    }
-}
 
 impl Printer for PlainTextPrinter {
     /// Trait implementation to print plain text to file out [`std::io::stdout`]
@@ -49,7 +43,7 @@ pub struct HighlightTextPrinter<'a> {
 impl<'a> HighlightTextPrinter<'a> {
     /// Create a new instance of [`HighlightTextPrinter`] to store highlight
     /// assets
-    pub fn new(assets: &'a HighlightAssets, theme: &str) -> Self {
+    pub(crate) fn new(assets: &'a HighlightAssets, theme: &str) -> Self {
         HighlightTextPrinter {
             assets,
             theme: theme.to_owned(),
@@ -57,8 +51,7 @@ impl<'a> HighlightTextPrinter<'a> {
     }
 }
 
-#[allow(single_use_lifetimes)]
-impl<'a> Printer for HighlightTextPrinter<'a> {
+impl Printer for HighlightTextPrinter<'_> {
     /// Implementation of the [`Printer`] trait for [`HighlightTextPrinter`]
     fn print(&self, dest: &mut dyn Write, text: &Formatted) -> Result<(), Error> {
         let syntax = self

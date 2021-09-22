@@ -8,12 +8,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// use crate::config::builder::Builder;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use rand::{distributions::Alphanumeric, Rng};
-use regex::bytes::Regex;
+use regex::{bytes::Regex as RegexBytes, Regex};
 use thiserror::Error;
+
+use crate::config::encrypt::{fortress::Fortress, FORTRESS_UMASK};
+
+/// Prevent multiple compilations of the same `Regex`.
+static SNEAKY_RE: OnceCell<Regex> = OnceCell::new();
 
 /// Errors that can happen when using utilties that mainly have to do with files
 /// and file paths
@@ -129,9 +134,45 @@ pub enum Error {
         #[source]
         error: toml::ser::Error,
     },
-    /// Error retrieving file metadata
-    #[error("error retrieving file metadata: {0}")]
-    MetadataRetrieval(#[source] io::Error),
+    /// Path has invalid/sneaky characters
+    #[error("{0:?} contains a sneaky pattern")]
+    SneakyPath(PathBuf),
+    /// Path does not have a parent path
+    #[error("{0:?} doesn't have a parent")]
+    InvalidParent(PathBuf),
+    /// Cannot set permissions on file
+    #[error("error setting permissions on {path}: {error}")]
+    PermissionSet {
+        /// The path of the file that is havings perms set
+        path:  PathBuf,
+        /// The error that occurred while setting perms
+        #[source]
+        error: io::Error,
+    },
+    /// Error accessing metadata attributes
+    #[error("error accessing metadata attributes on {path}: {error}")]
+    MetadataAttrs {
+        /// The path of the file
+        path:  PathBuf,
+        /// The error that occurred while accessing meta
+        #[source]
+        error: io::Error,
+    },
+}
+
+#[macro_export]
+/// Macro to easily print an error message
+macro_rules! hoard_error {
+    ($($err:tt)*) => ({
+        eprintln!("{}: {}", "[hoard error]".red().bold(), format!($($err)*));
+    })
+}
+#[macro_export]
+/// Macro to easily print a warning message
+macro_rules! hoard_warn {
+    ($($err:tt)*) => ({
+        eprintln!("{}: {}", "[hoard warning]".yellow().bold(), format!($($err)*));
+    })
 }
 
 /// Convert search string to bytes
@@ -145,7 +186,7 @@ pub fn osstr_to_bytes(input: &OsStr) -> Cow<[u8]> {
 /// be any valid Unicode character
 pub fn contains_upperchar(pattern: &str) -> bool {
     #[allow(clippy::unwrap_used)]
-    static UPPER_REG: Lazy<Regex> = Lazy::new(|| Regex::new(r"[[:upper:]]").unwrap());
+    static UPPER_REG: Lazy<RegexBytes> = Lazy::new(|| RegexBytes::new(r"[[:upper:]]").unwrap());
     let cow_pat: Cow<OsStr> = Cow::Owned(OsString::from(pattern));
     UPPER_REG.is_match(&osstr_to_bytes(cow_pat.as_ref()))
 }
@@ -233,4 +274,65 @@ pub fn delete_file<P: AsRef<Path>>(file: P) {
     } else {
         println!();
     }
+}
+
+/// Recursively set permissions on a `Fortress`
+///
+/// # Panics
+/// On invalid metadata of file..
+pub fn recursively_set_perms<P: AsRef<Path>>(path: P, fort: &Fortress) -> Result<(), Error> {
+    let path = path.as_ref();
+    if SNEAKY_RE
+        .get_or_init(|| Regex::new("/..$|^../|/../|^..$").unwrap())
+        .is_match(&(path.display().to_string()))
+    {
+        return Err(Error::SneakyPath(path.into()));
+    }
+
+    // Necessary to call `getuid`
+    #[allow(unsafe_code)]
+    let uid = unsafe { libc::getuid() };
+    let path_uid = if path.exists() {
+        path.metadata()?.uid()
+    } else {
+        uid
+    };
+
+    // Return if the file isn't owned by user (all should be)
+    if path_uid != uid {
+        return Ok(());
+    }
+
+    if path.is_dir() {
+        let mut perms = fs::metadata(&path)
+            .map_err(|err| Error::MetadataAttrs {
+                path:  path.to_path_buf(),
+                error: err,
+            })?
+            .permissions();
+        perms.set_mode(perms.mode() - (perms.mode() & *FORTRESS_UMASK));
+
+        fs::set_permissions(&path, perms).map_err(|err| Error::PermissionSet {
+            path:  path.to_path_buf(),
+            error: err,
+        })?;
+
+        if path == fort.root {
+            return Ok(());
+        }
+
+        recursively_set_perms(
+            path.parent()
+                .ok_or_else(|| Error::InvalidParent(path.to_path_buf()))?,
+            fort,
+        )?;
+    } else {
+        recursively_set_perms(
+            path.parent()
+                .ok_or_else(|| Error::InvalidParent(path.to_path_buf()))?,
+            fort,
+        )?;
+    }
+
+    Ok(())
 }

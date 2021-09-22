@@ -15,6 +15,10 @@ use crate::config::encrypt::{
 
 use super::gpg;
 
+// use std::sync::Once;
+use once_cell::sync::OnceCell;
+static ONCE: OnceCell<()> = OnceCell::new();
+
 /// Errors used throughout the `context` part of the `gpgme` module
 #[derive(Debug, Error)]
 pub enum Error {
@@ -25,14 +29,15 @@ pub enum Error {
 
 /// Return `Context` from `gpgme` which this whole module is based off of
 pub fn context(config: &Config) -> Result<Context> {
-    // TODO: only call once
-    let _span = tracing::trace_span!("setting gpgme context");
-    if config.gpg_tty && !utils::has_gpg_tty() {
-        if let Some(tty) = utils::get_tty() {
-            tracing::trace!(?tty, "setting `GPG_TTY`");
-            env::set_var("GPG_TTY", tty);
+    ONCE.get_or_init(|| {
+        let _span = tracing::trace_span!("setting gpgme context");
+        if config.gpg_tty && !utils::has_gpg_tty() {
+            if let Some(tty) = utils::get_tty() {
+                tracing::trace!(?tty, "setting `GPG_TTY`");
+                env::set_var("GPG_TTY", tty);
+            }
         }
-    }
+    });
 
     let mut context = gpgme::Context::from_protocol(Protocol::OpenPgp).map_err(Error::Context)?;
 
@@ -74,12 +79,16 @@ impl ImplContext for Context {
         gpg::encrypt(&mut self.context, &fingerprints, &plaintext)
     }
 
+    fn encrypt_symmetric(&mut self, plaintext: Plaintext) -> Result<Sectext> {
+        gpg::encrypt_symmetric(&mut self.context, &plaintext)
+    }
+
     fn decrypt(&mut self, sectext: Sectext) -> Result<Plaintext> {
         gpg::decrypt(&mut self.context, &sectext)
     }
 
     fn can_decrypt(&mut self, sectext: Sectext) -> Result<bool> {
-        gpg::can_decrypt(&mut self.context, &sectext)
+        Ok(gpg::can_decrypt(&mut self.context, &sectext))
     }
 
     fn user_emails(&mut self) -> Result<Vec<String>> {

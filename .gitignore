@@ -2,6 +2,7 @@
 /target
 *.profraw
 Cargo.lock
-sample/out
 extra/
+sample/out
 sample/testing/
+sample/backup

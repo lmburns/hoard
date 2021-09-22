@@ -56,6 +56,8 @@ pub struct AsymmetricEncryption {
     pub armor:      bool,
 }
 
+// Default is still functional, as the creating of a new `Fortress` will prompt
+// the user for the encryption key to use
 impl Default for AsymmetricEncryption {
     fn default() -> Self {
         Self {
@@ -122,22 +124,14 @@ impl Default for Walker {
 }
 
 /// Hoard/Pile configuration.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Config {
     /// Encryption configuration options
     pub encryption: Option<Encryption>,
     /// WalkBuilder configuration options
     #[serde(flatten)]
+    #[serde(default)]
     pub walker:     Walker,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            encryption: None,
-            walker:     Walker::default(),
-        }
-    }
 }
 
 /// A single pile in the hoard.

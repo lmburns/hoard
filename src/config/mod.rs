@@ -30,7 +30,6 @@ pub mod directories;
 pub mod encrypt;
 pub mod filetypes;
 pub mod hoard;
-// pub mod modify;
 
 /// Errors that can occur while working with a [`Config`].
 #[derive(Debug, Error)]

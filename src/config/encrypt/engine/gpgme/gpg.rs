@@ -12,7 +12,7 @@ use crate::config::encrypt::types::{Plaintext, Sectext};
 
 /// `GPGME` errors
 #[derive(Debug, Error)]
-pub enum Error {
+pub(crate) enum Error {
     /// `GPGME` encryption error
     #[error("failed to encrypt plaintext")]
     Encrypt(#[source] gpgme::Error),
@@ -30,9 +30,6 @@ pub enum Error {
     UnknownFingerprint(#[source] gpgme::Error),
 }
 
-/// `GPGME` encryption flags
-const ENCRYPT_FLAGS: EncryptFlags = EncryptFlags::ALWAYS_TRUST;
-
 /// Encrypt `Plaintext` for the given recipients.
 ///
 /// - `context`: `GPGME` context
@@ -42,7 +39,7 @@ const ENCRYPT_FLAGS: EncryptFlags = EncryptFlags::ALWAYS_TRUST;
 /// # Panics
 ///
 /// Panics if list of recipients is empty.
-pub fn encrypt(
+pub(crate) fn encrypt(
     context: &mut Context,
     recipients: &[&str],
     plaintext: &Plaintext,
@@ -59,7 +56,28 @@ pub fn encrypt(
             keys.iter(),
             plaintext.unsecure_ref(),
             &mut sectext,
-            ENCRYPT_FLAGS,
+            EncryptFlags::ALWAYS_TRUST,
+        )
+        .map_err(Error::Encrypt)?;
+    Ok(Sectext::from(sectext))
+}
+
+// TODO: Flags here do not allow for encryption with a password with no
+// interaction of the file Only idea I have is to tar the directory and encrypt
+// it
+
+/// Encrypt `Plaintext` symmetrically for the given recipients.
+///
+/// - `context`: `GPGME` context
+/// - `recipients`: list of recipient fingerprints to encrypt for
+/// - `plaintext`: `Plaintext` to encrypt
+pub(crate) fn encrypt_symmetric(context: &mut Context, plaintext: &Plaintext) -> Result<Sectext> {
+    let mut sectext = vec![];
+    context
+        .encrypt_symmetric_with_flags(
+            plaintext.unsecure_ref(),
+            &mut sectext,
+            EncryptFlags::SYMMETRIC,
         )
         .map_err(Error::Encrypt)?;
     Ok(Sectext::from(sectext))
@@ -68,8 +86,8 @@ pub fn encrypt(
 /// Decrypt sectext.
 ///
 /// - `context`: GPGME context
-/// - `sectext`: sectext to decrypt
-pub fn decrypt(context: &mut Context, sectext: &Sectext) -> Result<Plaintext> {
+/// - `sectext`: encrypted text to decrypt
+pub(crate) fn decrypt(context: &mut Context, sectext: &Sectext) -> Result<Plaintext> {
     let mut plaintext = vec![];
     context
         .decrypt(sectext.unsecure_ref(), &mut plaintext)
@@ -87,22 +105,22 @@ pub fn decrypt(context: &mut Context, sectext: &Sectext) -> Result<Plaintext> {
 /// - `sectext`: `Sectext` to check
 // To check this, actual decryption is attempted, see this if this can be
 // improved: https://stackoverflow.com/q/64633736/1000145
-pub fn can_decrypt(context: &mut Context, sectext: &Sectext) -> Result<bool> {
+pub(crate) fn can_decrypt(context: &mut Context, sectext: &Sectext) -> bool {
     // Try to decrypt, explicit zeroing of unsecure buffer required
     let mut plaintext = vec![];
     let result = context.decrypt(sectext.unsecure_ref(), &mut plaintext);
     plaintext.zeroize();
 
     match result {
-        Err(err) if gpgme::error::Error::NO_SECKEY.code() == err.code() => Ok(false),
-        Ok(_) | Err(_) => Ok(true),
+        Err(err) if gpgme::error::Error::NO_SECKEY.code() == err.code() => false,
+        Ok(_) | Err(_) => true,
     }
 }
 
 /// Get all public keys from keychain.
 ///
 /// - `context`: GPGME context
-pub fn public_keys(context: &mut Context) -> Result<Vec<KeyId>> {
+pub(crate) fn public_keys(context: &mut Context) -> Result<Vec<KeyId>> {
     Ok(context
         .keys()?
         .into_iter()
@@ -115,7 +133,7 @@ pub fn public_keys(context: &mut Context) -> Result<Vec<KeyId>> {
 /// Get all private/secret keys from keychain.
 ///
 /// - `context`: `GPGME` context
-pub fn private_keys(context: &mut Context) -> Result<Vec<KeyId>> {
+pub(crate) fn private_keys(context: &mut Context) -> Result<Vec<KeyId>> {
     Ok(context
         .secret_keys()?
         .into_iter()
@@ -126,7 +144,7 @@ pub fn private_keys(context: &mut Context) -> Result<Vec<KeyId>> {
 }
 
 /// Access emails within the keychain
-pub fn user_emails(context: &mut Context) -> Result<Vec<String>> {
+pub(crate) fn user_emails(context: &mut Context) -> Result<Vec<String>> {
     let mut emails = vec![];
     context
         .secret_keys()?

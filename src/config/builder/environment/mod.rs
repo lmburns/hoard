@@ -68,7 +68,7 @@ impl From<Infallible> for Error {
 /// - [`Hostname`]
 /// - [`OperatingSystem`]
 /// - [`PathExists`]
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Hash, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Environment {
     hostname:    Option<Combinator<Hostname>>,
@@ -174,18 +174,6 @@ impl Environment {
         }
 
         Ok(())
-    }
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        Environment {
-            hostname:    None,
-            os:          None,
-            env:         None,
-            exe_exists:  None,
-            path_exists: None,
-        }
     }
 }
 

@@ -59,11 +59,11 @@ impl HoardProjectDirs {
         let data_dir = HoardProjectDirs::get_data_dir()?;
 
         let config_dir =
-            if let Some(config_dir_op) = env::var_os("HOARD_CONFIG_DIR").map(PathBuf::from) {
-                config_dir_op
+            if let Some(config_dir_og) = env::var_os("HOARD_CONFIG_DIR").map(PathBuf::from) {
+                config_dir_og
             } else {
                 #[cfg(target_os = "macos")]
-                let config_dir_op = env::var_os("XDG_CONFIG_HOME")
+                let config_dir_og = env::var_os("XDG_CONFIG_HOME")
                     .map(PathBuf::from)
                     .filter(|p| p.is_absolute())
                     .or_else(|| {
@@ -73,9 +73,9 @@ impl HoardProjectDirs {
                     });
 
                 #[cfg(not(target_os = "macos"))]
-                let config_dir_op = get_dirs().config_dir().to_path_buf();
+                let config_dir_og = get_dirs().config_dir().to_path_buf();
 
-                config_dir_op.map(|d| d.join(env!("CARGO_PKG_NAME")))?
+                config_dir_og.map(|d| d.join(env!("CARGO_PKG_NAME")))?
             };
 
         Some(HoardProjectDirs {
@@ -87,13 +87,13 @@ impl HoardProjectDirs {
     }
 
     fn get_cache_dir() -> Option<PathBuf> {
-        let cache_dir_op = env::var_os("HOARD_CACHE_DIR").map(PathBuf::from);
-        if cache_dir_op.is_some() {
-            return cache_dir_op;
+        let cache_dir_og = env::var_os("HOARD_CACHE_DIR").map(PathBuf::from);
+        if cache_dir_og.is_some() {
+            return cache_dir_og;
         }
 
         #[cfg(target_os = "macos")]
-        let cache_dir_op = env::var_os("XDG_CACHE_HOME")
+        let cache_dir_og = env::var_os("XDG_CACHE_HOME")
             .map(PathBuf::from)
             .filter(|p| p.is_absolute())
             .or_else(|| {
@@ -103,19 +103,19 @@ impl HoardProjectDirs {
             });
 
         #[cfg(not(target_os = "macos"))]
-        let cache_dir_op = get_dirs().cache_dir().to_path_buf();
+        let cache_dir_og = get_dirs().cache_dir().to_path_buf();
 
-        cache_dir_op.map(|d| d.join(env!("CARGO_PKG_NAME")))
+        cache_dir_og.map(|d| d.join(env!("CARGO_PKG_NAME")))
     }
 
     fn get_data_dir() -> Option<PathBuf> {
-        let cache_dir_op = env::var_os("HOARD_DATA_DIR").map(PathBuf::from);
-        if cache_dir_op.is_some() {
-            return cache_dir_op;
+        let cache_dir_og = env::var_os("HOARD_DATA_DIR").map(PathBuf::from);
+        if cache_dir_og.is_some() {
+            return cache_dir_og;
         }
 
         #[cfg(target_os = "macos")]
-        let cache_dir_op = env::var_os("XDG_DATA_HOME")
+        let cache_dir_og = env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
             .filter(|p| p.is_absolute())
             .or_else(|| {
@@ -125,9 +125,9 @@ impl HoardProjectDirs {
             });
 
         #[cfg(not(target_os = "macos"))]
-        let cache_dir_op = get_dirs().data_dir().to_path_buf();
+        let cache_dir_og = get_dirs().data_dir().to_path_buf();
 
-        cache_dir_op.map(|d| d.join(env!("CARGO_PKG_NAME")))
+        cache_dir_og.map(|d| d.join(env!("CARGO_PKG_NAME")))
     }
 
     fn get_home_dir() -> Option<PathBuf> {

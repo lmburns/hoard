@@ -16,7 +16,7 @@ use once_cell::sync::OnceCell;
 
 /// Keep it in this format since we want to load it lazily
 #[derive(Debug)]
-pub enum SerializedSyntaxSet {
+pub(crate) enum SerializedSyntaxSet {
     /// The data comes from a user-generated cache file
     FromFile(PathBuf),
     /// The data to use is embedded into the binary
@@ -34,24 +34,24 @@ impl SerializedSyntaxSet {
 
 /// Syntax and themes stored in a struct
 #[derive(Debug)]
-pub struct HighlightAssets {
+pub(crate) struct HighlightAssets {
     /// Syntax
-    pub syntax_set_cell:       OnceCell<SyntaxSet>,
+    pub(crate) syntax_set_cell:       OnceCell<SyntaxSet>,
     /// SynaxSet in serialized format
-    pub serialized_syntax_set: Option<SerializedSyntaxSet>,
+    pub(crate) serialized_syntax_set: Option<SerializedSyntaxSet>,
     /// Theme
-    pub theme_set:             ThemeSet,
+    pub(crate) theme_set:             ThemeSet,
     /// Theme to fallback on if another isn't found
-    pub fallback_theme:        Option<&'static str>,
+    pub(crate) fallback_theme:        Option<&'static str>,
 }
 
 /// Theme to fallback on if another isn't found
 #[derive(Debug)]
-pub struct SyntaxReferenceInSet<'a> {
+pub(crate) struct SyntaxReferenceInSet<'a> {
     /// Theme to fallback on if another isn't found
-    pub syntax:     &'a SyntaxReference,
+    pub(crate) syntax:     &'a SyntaxReference,
     /// Theme to fallback on if another isn't found
-    pub syntax_set: &'a SyntaxSet,
+    pub(crate) syntax_set: &'a SyntaxSet,
 }
 
 impl HighlightAssets {
@@ -60,7 +60,7 @@ impl HighlightAssets {
     ///
     /// # Panics
     /// Will panic if `syntax_set` or `serialized_syntax_set` is none
-    pub fn new(
+    pub(crate) fn new(
         syntax_set: Option<SyntaxSet>,
         serialized_syntax_set: Option<SerializedSyntaxSet>,
         theme_set: ThemeSet,
@@ -82,20 +82,20 @@ impl HighlightAssets {
 
     /// Default theme to display when printing config to [`std::io::stdout`]
     #[must_use]
-    pub fn default_theme() -> &'static str {
+    pub(crate) fn default_theme() -> &'static str {
         "KimbieDark"
     }
 
     /// Default json theme to display when printing config to
     /// [`std::io::stdout`]
     #[must_use]
-    pub fn default_json_theme() -> &'static str {
+    pub(crate) fn default_json_theme() -> &'static str {
         "GitHub"
     }
 
     // #[cfg(feature = "build-assets")]
     /// Get assets from files in specified directory
-    pub fn from_files(source_dir: &Path, include_integrated_assets: bool) -> Result<Self> {
+    pub(crate) fn from_files(source_dir: &Path, include_integrated_assets: bool) -> Result<Self> {
         let mut theme_set = if include_integrated_assets {
             get_integrated_themeset()
         } else {
@@ -156,7 +156,7 @@ impl HighlightAssets {
     ///
     /// # Errors
     /// None
-    pub fn from_cache(cache_path: &Path) -> Result<Self> {
+    pub(crate) fn from_cache(cache_path: &Path) -> Result<Self> {
         Ok(HighlightAssets::new(
             None,
             Some(SerializedSyntaxSet::FromFile(
@@ -170,7 +170,7 @@ impl HighlightAssets {
     ///
     /// # Errors
     /// None
-    pub fn from_binary() -> Self {
+    pub(crate) fn from_binary() -> Self {
         HighlightAssets::new(
             None,
             Some(SerializedSyntaxSet::FromBinary(
@@ -181,7 +181,7 @@ impl HighlightAssets {
     }
 
     /// Save themes and syntaxes to cache
-    pub fn save_to_cache(&self, target_dir: &Path) -> Result<()> {
+    pub(crate) fn save_to_cache(&self, target_dir: &Path) -> Result<()> {
         #[allow(clippy::let_underscore_drop)]
         let _ = fs::create_dir_all(target_dir);
         asset_to_cache(
@@ -205,11 +205,6 @@ impl HighlightAssets {
         Ok(())
     }
 
-    /// Set `self.fallback_theme`
-    pub fn set_fallback_theme(&mut self, theme: &'static str) {
-        self.fallback_theme = Some(theme);
-    }
-
     pub(crate) fn get_syntax_set(&self) -> Result<&SyntaxSet> {
         if self.syntax_set_cell.get().is_none() {
             self.syntax_set_cell
@@ -230,7 +225,7 @@ impl HighlightAssets {
     ///
     /// # Errors
     /// `SyntaxReference` build failure
-    pub fn get_syntaxes(&self) -> Result<&[SyntaxReference]> {
+    pub(crate) fn get_syntaxes(&self) -> Result<&[SyntaxReference]> {
         Ok(self.get_syntax_set()?.syntaxes())
         // self.syntax_set.syntaxes()
     }
@@ -240,7 +235,7 @@ impl HighlightAssets {
     }
 
     /// Return iterator over all themes to list them
-    pub fn themes(&self) -> impl Iterator<Item = &str> {
+    pub(crate) fn themes(&self) -> impl Iterator<Item = &str> {
         self.get_theme_set().themes.keys().map(|s| s.as_ref())
         // self.theme_set.themes.iter().map(|(_, v)| v).collect() -> Vec<&Theme>
     }
@@ -249,7 +244,10 @@ impl HighlightAssets {
     ///
     /// # Errors
     /// `SyntaxReferenceInSet` build failure
-    pub fn find_syntax_by_file_name(&self, ext: &str) -> Result<Option<SyntaxReferenceInSet>> {
+    pub(crate) fn find_syntax_by_file_name(
+        &self,
+        ext: &str,
+    ) -> Result<Option<SyntaxReferenceInSet>> {
         let syntax_set = self.get_syntax_set()?;
         Ok(syntax_set
             .find_syntax_by_extension(ext)
@@ -257,7 +255,8 @@ impl HighlightAssets {
     }
 
     /// Return default theme
-    pub fn get_default_theme(&self) -> &Theme {
+    #[allow(dead_code)]
+    pub(crate) fn get_default_theme(&self) -> &Theme {
         self.get_theme(Self::default_theme())
     }
 
@@ -276,7 +275,8 @@ impl HighlightAssets {
     }
 
     /// Get different theme for JSON
-    pub fn get_theme_for_syntax(&self, syntax: &SyntaxReference) -> &Theme {
+    #[allow(dead_code)]
+    pub(crate) fn get_theme_for_syntax(&self, syntax: &SyntaxReference) -> &Theme {
         self.get_theme(if syntax.name.to_ascii_lowercase() == "json" {
             Self::default_json_theme()
         } else {
@@ -312,7 +312,7 @@ fn clear_asset(filename: &str, description: &str) {
 }
 
 /// Clear syntect cache from [`XDG_DATA_HOME`] directory
-pub fn clear_assets() {
+pub(crate) fn clear_assets() {
     clear_asset("themes.bin", "theme set cache");
     clear_asset("syntaxes.bin", "syntax set cache");
 }
@@ -321,17 +321,16 @@ pub fn clear_assets() {
 ///
 /// # Errors
 /// Returns `None` otherwise
-pub fn assets_from_cache_or_binary(use_custom_assets: bool) -> Result<HighlightAssets> {
+pub(crate) fn assets_from_cache_or_binary(use_custom_assets: bool) -> Result<HighlightAssets> {
     let cache_dir = PROJECT_DIRS.cache_dir();
 
-    let custom_assets = if use_custom_assets {
+    if use_custom_assets {
         tracing::trace!("using assets from cache");
-        HighlightAssets::from_cache(cache_dir).ok()
+        HighlightAssets::from_cache(cache_dir)
     } else {
         tracing::trace!("using assets from binary");
-        None
-    };
-    Ok(custom_assets.unwrap_or_else(HighlightAssets::from_binary))
+        Ok(HighlightAssets::from_binary())
+    }
 }
 
 fn build_assets(source: Option<&String>, dest: Option<&String>) -> Result<()> {
@@ -350,7 +349,7 @@ fn build_assets(source: Option<&String>, dest: Option<&String>) -> Result<()> {
 }
 
 /// Run `build` or `clear` cache command
-pub fn run_cache(
+pub(crate) fn run_cache(
     build: bool,
     clear: bool,
     source: &Option<String>,

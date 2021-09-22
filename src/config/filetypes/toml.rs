@@ -19,9 +19,9 @@ pub fn serialize<V: serde::ser::Serialize>(v: V) -> Result<String, Error> {
 /// Error arises during conversion of type [`str`] to [`serde::de::Deserialize`]
 /// using [`toml`]
 #[allow(single_use_lifetimes)]
-pub fn deserialize<V>(s: &str) -> Result<V, Error>
+pub fn deserialize<D>(s: &str) -> Result<D, Error>
 where
-    V: for<'de> serde::de::Deserialize<'de>,
+    D: for<'de> serde::de::Deserialize<'de>,
 {
     let deserialized = toml::from_str(s).map_err(|e| Error::Deserialization(e.to_string()))?;
     Ok(deserialized)

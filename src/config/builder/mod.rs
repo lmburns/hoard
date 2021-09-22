@@ -53,22 +53,13 @@ pub enum Error {
 /// Ingores is the only option as of now, but the individual hoard
 /// configuration options will be available for the global as well.
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case", default)]
 pub struct GlobalConfig {
     /// Global ignore patterns that mimic git's ignore patterns
     pub ignores:    Option<Vec<String>>,
     /// Public GPG key
     pub public_key: Option<String>,
-}
-
-impl Default for GlobalConfig {
-    fn default() -> Self {
-        Self {
-            ignores:    None,
-            public_key: None,
-        }
-    }
 }
 
 /// Intermediate data structure to build a [`Config`](crate::config::Config).
@@ -376,11 +367,11 @@ impl Builder {
         tracing::debug!(?hoards_root);
         let config_file = self.config_file.unwrap_or_else(Self::default_config_file);
         tracing::debug!(?config_file);
-        let command = self.command.unwrap_or_else(Command::default);
+        let command = self.command.unwrap_or_default();
         tracing::debug!(?command);
         let force = self.force;
         tracing::debug!(?force);
-        let global_config = self.global_config.unwrap_or_else(GlobalConfig::default);
+        let global_config = self.global_config.unwrap_or_default();
         tracing::debug!(?global_config);
 
         tracing::debug!("processing hoards...");

@@ -227,7 +227,7 @@ impl ConfigConversion {
     ///
     /// # Errors
     /// Returns errors from creating file that is being written to
-    pub fn write_to_output(
+    pub(crate) fn write_to_output(
         &self,
         text: &Formatted,
         assets: &HighlightAssets,

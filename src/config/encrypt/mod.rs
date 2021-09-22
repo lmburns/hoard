@@ -8,11 +8,23 @@ pub mod types;
 pub mod utils;
 
 pub use recipients::Recipients;
-use std::{collections::HashMap, fmt, fs, path::Path};
+use std::{
+    collections::HashMap, env, fmt, fs, io::Write, os::unix::fs::OpenOptionsExt, path::Path,
+};
 pub use types::{Plaintext, Sectext};
 
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use thiserror::Error;
+
+/// `Fortress` UMASK
+pub static FORTRESS_UMASK: Lazy<u32> = Lazy::new(|| {
+    u32::from_str_radix(
+        &env::var("HOARD_UMASK").unwrap_or_else(|_| "077".to_owned()),
+        8,
+    )
+    .expect("umask was not valid octal")
+});
 
 /// Errors used within the encryption module file
 #[derive(Debug, Error)]
@@ -175,6 +187,11 @@ impl ImplContext for Context {
         self.context.encrypt(recipients, plaintext)
     }
 
+    /// Encrypt `Plaintext` symmetrically
+    fn encrypt_symmetric(&mut self, plaintext: Plaintext) -> Result<Sectext> {
+        self.context.encrypt_symmetric(plaintext)
+    }
+
     /// Decrypt `Sectext`
     fn decrypt(&mut self, sectext: Sectext) -> Result<Plaintext> {
         self.context.decrypt(sectext)
@@ -221,6 +238,15 @@ pub trait ImplContext {
     /// Encrypt `Plaintext` for recipients
     fn encrypt(&mut self, recipients: &Recipients, plaintext: Plaintext) -> Result<Sectext>;
 
+    /// Encrypt `Plaintext` symmetrically
+    fn encrypt_symmetric(&mut self, plaintext: Plaintext) -> Result<Sectext>;
+
+    /// Encrypt `Plaintext` symmetrically and write it to the file
+    fn encrypt_file_symmetric(&mut self, plaintext: Plaintext, path: &Path) -> Result<()> {
+        fs::write(path, self.encrypt_symmetric(plaintext)?.unsecure_ref())
+            .map_err(|err| Error::WriteFile(err).into())
+    }
+
     /// Encrypt `Plaintext` and write it to the file
     fn encrypt_file(
         &mut self,
@@ -228,8 +254,17 @@ pub trait ImplContext {
         plaintext: Plaintext,
         path: &Path,
     ) -> Result<()> {
-        fs::write(path, self.encrypt(recipients, plaintext)?.unsecure_ref())
+        let mut file = fs::OpenOptions::new()
+            .mode(0o666 - (0o666 & *FORTRESS_UMASK))
+            .write(true)
+            .create(true)
+            .open(&path)?;
+
+        file.write_all(self.encrypt(recipients, plaintext)?.unsecure_ref())
             .map_err(|err| Error::WriteFile(err).into())
+
+        // fs::write(path, self.encrypt(recipients, plaintext)?.unsecure_ref())
+        //     .map_err(|err| Error::WriteFile(err).into())
     }
 
     /// Decrypt `Sectext`
@@ -293,7 +328,14 @@ pub trait ImplContext {
 
     /// Export the given key from the keychain to a file.
     fn export_key_file(&mut self, key: Key, path: &Path) -> Result<()> {
-        fs::write(path, self.export_key(key)?).map_err(|err| Error::WriteFile(err).into())
+        let mut file = fs::OpenOptions::new()
+            .mode(0o666 - (0o666 & *FORTRESS_UMASK))
+            .write(true)
+            .create(true)
+            .open(&path)?;
+
+        file.write_all(&self.export_key(key)?)
+            .map_err(|err| Error::WriteFile(err).into())
     }
 
     /// Check whether this context supports the given protocol.
