@@ -13,10 +13,12 @@ use crate::{
         encrypt::{
             fortress::{
                 append_sec_suffix, build_fortress, is_secret_file, is_special_file, rm_sec_suffix,
-                Secret,
+                Fortress, Secret,
             },
             prelude::*,
             types::Plaintext,
+            utils::context,
+            Context, Recipients,
         },
     },
     hoard_error, hoard_warn,
@@ -29,6 +31,7 @@ use crate::{
 use colored::Colorize;
 use crossbeam_channel as channel;
 use ignore::{overrides::OverrideBuilder, WalkBuilder, WalkState};
+use once_cell::sync::{Lazy, OnceCell};
 use rayon::prelude::*;
 use regex::bytes::RegexBuilder;
 use std::{
@@ -37,10 +40,15 @@ use std::{
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     thread,
 };
 use thiserror::Error;
+
+static FORTRESS_INITIALIZATION: OnceCell<Result<(Fortress, Recipients), Error>> = OnceCell::new();
 
 /// Errors that can happen while backing up or restoring a hoard.
 #[derive(Debug, Error)]
@@ -104,6 +112,12 @@ pub enum Error {
     /// Anyhow context
     #[error("failed to obtain GPGME cryptography context")]
     Context(#[source] anyhow::Error),
+    /// OnceCell access context
+    #[error("failed to access oncecell contents")]
+    OnceCellAccess,
+    /// Anyhow context
+    #[error("failed to deconstruct fortress configuration")]
+    DeconstructingFortress,
     /// Failure to normalize path for encryption
     #[error("failed append encryption suffix to path")]
     AppendingSuffix(#[source] anyhow::Error),
@@ -263,42 +277,30 @@ impl Pile {
             });
         });
 
-        // Create fortress directory first for initialization of encryption
-        fs::create_dir_all(dest).map_err(|err| Error::CreateDir {
-            path:  dest.to_path_buf(),
-            error: err,
-        })?;
-
-        let (mut context, fortress, recipients) = build_fortress(
-            if restore { src } else { dest },
-            &self.config.clone().unwrap_or_default(),
-        )
-        .map_err(|err| Error::Context(err.into()))?;
-
-        while let Ok(src) = rx.recv() {
-            tracing::trace!("Walker source: {:?}", src);
-            let src_path = src.path();
+        while let Ok(mod_src) = rx.recv() {
+            tracing::trace!("Walker source: {:?}", mod_src);
+            let src_path = mod_src.path();
 
             // Reverses path and grabs n components away from base dir
-            let dest = &mut PathBuf::from(dest);
+            let mod_dest = &mut PathBuf::from(dest);
             src_path
                 .iter()
                 .rev()
                 .clone()
                 .collect::<Vec<_>>()
-                .drain(..src.depth())
+                .drain(..mod_src.depth())
                 .collect::<Vec<_>>()
                 .iter()
                 .rev()
-                .for_each(|comp| dest.push(comp));
+                .for_each(|comp| mod_dest.push(comp));
 
-            if let Some(file_type) = src.file_type() {
+            if let Some(file_type) = mod_src.file_type() {
                 if file_type.is_dir() {
                     let _span = tracing::trace_span!("is_directory").entered();
                 } else if file_type.is_file() {
                     let _span = tracing::trace_span!("is_file").entered();
-                    if let Some(parent) = dest.parent() {
-                        if is_special_file(&src) && restore {
+                    if let Some(parent) = mod_dest.parent() {
+                        if is_special_file(&mod_src) && restore {
                             continue;
                         }
                         tracing::trace!(
@@ -306,23 +308,36 @@ impl Pile {
                             "ensuring parent directories for destination",
                         );
                         fs::create_dir_all(parent).map_err(|err| Error::CreateDir {
-                            path:  dest.clone(),
+                            path:  mod_dest.clone(),
                             error: err,
                         })?;
                     }
 
-                    // tracing::debug!("source :: {:#?}", src_path);
-                    // tracing::debug!("destination :: {:#?}", dest);
-
                     if let Some(enc) = self.config.clone().and_then(|conf| conf.encryption) {
+                        FORTRESS_INITIALIZATION.get_or_init(|| {
+                            tracing::trace!("running fortress initialization");
+                            build_fortress(
+                                if restore { src } else { dest },
+                                &self.config.clone().unwrap_or_default(),
+                            )
+                            .map_err(|err| Error::Context(err.into()))
+                        });
+
+                        // TODO: use or remove fortress
+                        let (_fortress, recipients) = FORTRESS_INITIALIZATION
+                            .get()
+                            .ok_or(Error::OnceCellAccess)?
+                            .as_ref()
+                            .map_err(|e| Error::Context(e.into()))?;
+
                         // If file is '.gpg-id' or the directory '.public-keys', do
                         // not do anything extra
-                        if is_special_file(&src) {
+                        if is_special_file(&mod_src) {
                             if !restore {
-                                fs::copy(src_path.to_owned(), &dest).map_err(|err| {
+                                fs::copy(src_path.to_owned(), &mod_dest).map_err(|err| {
                                     Error::CopyFile {
                                         src:   src_path.to_owned(),
-                                        dest:  dest.clone(),
+                                        dest:  mod_dest.clone(),
                                         error: err,
                                     }
                                 })?;
@@ -331,16 +346,19 @@ impl Pile {
                         }
 
                         if restore {
-                            let norm = rm_sec_suffix(&dest).map_err(Error::RemovingSuffix)?;
+                            let norm = rm_sec_suffix(&mod_dest).map_err(Error::RemovingSuffix)?;
                             println!("norm :: {:#?}", norm);
+
                             match enc {
                                 Encryption::Symmetric(e) => match e {
                                     SymmetricEncryption::Password(pass) => {
                                         println!("pass: {:#?}", pass);
-                                        let plaintext = context
-                                            .decrypt_file(src_path)
-                                            .map_err(Error::Decrypt)?;
-                                        fs::write(&norm, plaintext.unsecure_ref())
+                                        let plaintext =
+                                            context(&self.config.clone().unwrap_or_default())
+                                                .map_err(|err| Error::Context(err.into()))?
+                                                .decrypt_file(src_path)
+                                                .map_err(Error::Decrypt)?;
+                                        fs::write(&norm, &plaintext.unsecure_ref())
                                             .map_err(Error::Write)?;
                                     },
                                     SymmetricEncryption::PasswordCmd(pass_cmd) => {
@@ -350,13 +368,17 @@ impl Pile {
                                 Encryption::Asymmetric(e) => {
                                     println!("asym: {:#?}", e.public_key);
                                     let plaintext =
-                                        context.decrypt_file(src_path).map_err(Error::Decrypt)?;
-                                    fs::write(&norm, plaintext.unsecure_ref())
+                                        context(&self.config.clone().unwrap_or_default())
+                                            .map_err(|err| Error::Context(err.into()))?
+                                            .decrypt_file(src_path)
+                                            .map_err(Error::Decrypt)?;
+                                    fs::write(&norm, &plaintext.unsecure_ref())
                                         .map_err(Error::Write)?;
                                 },
                             }
                         } else {
-                            let norm = append_sec_suffix(&dest).map_err(Error::AppendingSuffix)?;
+                            let norm =
+                                append_sec_suffix(&mod_dest).map_err(Error::AppendingSuffix)?;
                             let plaintext =
                                 Plaintext::from(fs::read(&src_path).map_err(|err| {
                                     Error::ReadItem {
@@ -364,11 +386,13 @@ impl Pile {
                                         error: err,
                                     }
                                 })?);
+
                             match enc {
                                 Encryption::Symmetric(e) => match e {
                                     SymmetricEncryption::Password(pass) => {
                                         println!("pass: {:#?}", pass);
-                                        context
+                                        context(&self.config.clone().unwrap_or_default())
+                                            .map_err(|err| Error::Context(err.into()))?
                                             .encrypt_file_symmetric(plaintext, &norm)
                                             .map_err(Error::Encrypt)?;
                                     },
@@ -378,22 +402,25 @@ impl Pile {
                                 },
                                 Encryption::Asymmetric(e) => {
                                     println!("asym: {:#?}", e.public_key);
-                                    context
-                                        .encrypt_file(&recipients, plaintext, &norm)
+                                    context(&self.config.clone().unwrap_or_default())
+                                        .map_err(|err| Error::Context(err.into()))?
+                                        .encrypt_file(recipients, plaintext, &norm)
                                         .map_err(Error::Encrypt)?;
                                 },
                             }
                         }
                     } else {
                         // Copy all files as is
-                        fs::copy(src_path.to_owned(), &dest).map_err(|err| Error::CopyFile {
-                            src:   src_path.to_owned(),
-                            dest:  dest.clone(),
-                            error: err,
+                        fs::copy(src_path.to_owned(), &mod_dest).map_err(|err| {
+                            Error::CopyFile {
+                                src:   src_path.to_owned(),
+                                dest:  mod_dest.clone(),
+                                error: err,
+                            }
                         })?;
                         tracing::debug!(
                             source = src_path.to_string_lossy().as_ref(),
-                            destination = dest.to_string_lossy().as_ref(),
+                            destination = mod_dest.to_string_lossy().as_ref(),
                             "copying",
                         );
                     }
@@ -405,7 +432,7 @@ impl Pile {
                 }
             } else {
                 tracing::warn!(
-                    source = src.path().to_string_lossy().as_ref(),
+                    source = mod_src.path().to_string_lossy().as_ref(),
                     "source does not have a file type",
                 );
             }

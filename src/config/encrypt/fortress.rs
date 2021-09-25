@@ -20,7 +20,7 @@ use crate::{
 
 use super::{
     prelude::*, recipients::Recipients, selection::select_key, types::Plaintext, utils, Config,
-    Context, ContextPool, Engine, Key, FORTRESS_UMASK,
+    ContextPool, Engine, Key, FORTRESS_UMASK,
 };
 
 // TODO: choose
@@ -508,10 +508,7 @@ pub fn can_decrypt(fortress: &Fortress) -> bool {
 /// Build the fortress using the base path from the `WalkBuilder`. This will
 /// check for an existing `Fortress`, and if one doesn't exist, it will create
 /// one. Returns the context from the `gpgme` wrapper
-pub fn build_fortress(
-    src: &Path,
-    config: &HoardConfig,
-) -> Result<(Context, Fortress, Recipients), Error> {
+pub fn build_fortress(src: &Path, config: &HoardConfig) -> Result<(Fortress, Recipients), Error> {
     let _span = tracing::trace_span!("building fortress").entered();
     let fortress = Fortress::open(src).map_err(Error::Fortress)?;
 
@@ -555,5 +552,5 @@ pub fn build_fortress(
         recipients.save(&fortress).expect("error saving fortress");
     };
 
-    Ok((context, fortress, recipients))
+    Ok((fortress, recipients))
 }
