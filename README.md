@@ -1,3 +1,4 @@
+he
 # Hoard
 
 ## TODO
@@ -8,6 +9,8 @@
 * Run threads on the receiver end of `WalkBuilder`
 * Option to add things to configuration from the command line
 * Allow default configuration to be many formats, not just `config.toml`
+* Deletion of cache from a command
+* Report all errors together
 
 ### Working and Compatibility
 * Ensure more tests

@@ -126,7 +126,7 @@ pub(crate) fn public_keys(context: &mut Context) -> Result<Vec<KeyId>> {
         .into_iter()
         .filter_map(Result::ok)
         .filter(Key::can_encrypt)
-        .map(|k| k.into())
+        .map(Into::into)
         .collect())
 }
 
@@ -139,7 +139,7 @@ pub(crate) fn private_keys(context: &mut Context) -> Result<Vec<KeyId>> {
         .into_iter()
         .filter_map(Result::ok)
         .filter(Key::can_encrypt)
-        .map(|k| k.into())
+        .map(Into::into)
         .collect())
 }
 

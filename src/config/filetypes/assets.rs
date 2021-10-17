@@ -236,7 +236,7 @@ impl HighlightAssets {
 
     /// Return iterator over all themes to list them
     pub(crate) fn themes(&self) -> impl Iterator<Item = &str> {
-        self.get_theme_set().themes.keys().map(|s| s.as_ref())
+        self.get_theme_set().themes.keys().map(AsRef::as_ref)
         // self.theme_set.themes.iter().map(|(_, v)| v).collect() -> Vec<&Theme>
     }
 
@@ -269,8 +269,7 @@ impl HighlightAssets {
             if !theme.is_empty() {
                 tracing::warn!("unknown theme '{}'. Using default", theme);
             }
-            &self.get_theme_set().themes
-                [self.fallback_theme.unwrap_or_else(|| Self::default_theme())]
+            &self.get_theme_set().themes[self.fallback_theme.unwrap_or_else(Self::default_theme)]
         }
     }
 
@@ -334,8 +333,8 @@ pub(crate) fn assets_from_cache_or_binary(use_custom_assets: bool) -> Result<Hig
 }
 
 fn build_assets(source: Option<&String>, dest: Option<&String>) -> Result<()> {
-    let source_dir = source.map_or_else(|| PROJECT_DIRS.config_dir(), |p| Path::new(p));
-    let dest_dir = dest.map_or_else(|| PROJECT_DIRS.cache_dir(), |p| Path::new(p));
+    let source_dir = source.map_or_else(|| PROJECT_DIRS.config_dir(), Path::new);
+    let dest_dir = dest.map_or_else(|| PROJECT_DIRS.cache_dir(), Path::new);
     tracing::debug!(
         "building cache from: {}, to: {}",
         source_dir.display(),

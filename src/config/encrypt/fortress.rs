@@ -14,7 +14,10 @@ use ignore::WalkBuilder;
 use thiserror::Error;
 
 use crate::{
-    config::builder::hoard::{Config as HoardConfig, Encryption},
+    config::builder::{
+        hoard::{Config as HoardConfig, Encryption},
+        GlobalConfig,
+    },
     utils::recursively_set_perms,
 };
 
@@ -188,7 +191,7 @@ fn read_fingerprints<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
         .map_err(Error::ReadFile)?
         .lines()
         .filter(|fp| !fp.trim().is_empty())
-        .map(|fp| fp.into())
+        .map(Into::into)
         .collect())
 }
 
@@ -508,7 +511,11 @@ pub fn can_decrypt(fortress: &Fortress) -> bool {
 /// Build the fortress using the base path from the `WalkBuilder`. This will
 /// check for an existing `Fortress`, and if one doesn't exist, it will create
 /// one. Returns the context from the `gpgme` wrapper
-pub fn build_fortress(src: &Path, config: &HoardConfig) -> Result<(Fortress, Recipients), Error> {
+pub fn build_fortress(
+    src: &Path,
+    config: &HoardConfig,
+    global: &GlobalConfig,
+) -> Result<(Fortress, Recipients), Error> {
     let _span = tracing::trace_span!("building fortress").entered();
     let fortress = Fortress::open(src).map_err(Error::Fortress)?;
 
@@ -522,6 +529,18 @@ pub fn build_fortress(src: &Path, config: &HoardConfig) -> Result<(Fortress, Rec
         let mut tmp = Recipients::from(context.keys_private().map_err(Error::NoPrivateKeys)?);
         tmp.remove_all(recipients.keys());
 
+        let mut check_keys = |public: &str| -> Option<&Key> {
+            tmp.keys().iter().find(|key| {
+                public == key.fingerprint(false)
+                    || public == key.fingerprint(true)
+                    || context
+                        .user_emails()
+                        .iter()
+                        .any(|emails| emails.iter().any(|email| email == public))
+            })
+        };
+
+        // TODO: Fix extremely ugly if statements
         let key = if let Some(Encryption::Asymmetric(enc)) = config.clone().encryption {
             if let Some(public) = enc.public_key {
                 let public = public
@@ -529,14 +548,20 @@ pub fn build_fortress(src: &Path, config: &HoardConfig) -> Result<(Fortress, Rec
                     .strip_prefix("0x")
                     .unwrap_or_else(|| public.trim());
 
-                if let Some(key) = tmp.keys().iter().find(|key| {
-                    public == key.fingerprint(false)
-                        || public == key.fingerprint(true)
-                        || context
-                            .user_emails()
-                            .iter()
-                            .any(|emails| emails.iter().any(|email| email == public))
-                }) {
+                if let Some(key) = check_keys(public) {
+                    key
+                // // Should global key be provided as fallback for wrong local
+                // key? } else if let Some(global) =
+                // global.clone().public_key {     if let
+                // Some(key) = check_keys(&global) {         key
+                //     } else {
+                //         select_key(tmp.keys(),
+                // None).ok_or(Error::NoKeySelected)?     }
+                } else {
+                    select_key(tmp.keys(), None).ok_or(Error::NoKeySelected)?
+                }
+            } else if let Some(global) = global.clone().public_key {
+                if let Some(key) = check_keys(&global) {
                     key
                 } else {
                     select_key(tmp.keys(), None).ok_or(Error::NoKeySelected)?
@@ -545,6 +570,7 @@ pub fn build_fortress(src: &Path, config: &HoardConfig) -> Result<(Fortress, Rec
                 select_key(tmp.keys(), None).ok_or(Error::NoKeySelected)?
             }
         } else {
+            // Don't think this will ever be called since it is if encryption is not present
             select_key(tmp.keys(), None).ok_or(Error::NoKeySelected)?
         };
 

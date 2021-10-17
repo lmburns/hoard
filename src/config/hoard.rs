@@ -51,6 +51,7 @@ use thiserror::Error;
 static FORTRESS_INITIALIZATION: OnceCell<Result<(Fortress, Recipients), Error>> = OnceCell::new();
 
 /// Errors that can happen while backing up or restoring a hoard.
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum Error {
     /// Error while copying a file.
@@ -319,6 +320,7 @@ impl Pile {
                             build_fortress(
                                 if restore { src } else { dest },
                                 &self.config.clone().unwrap_or_default(),
+                                global,
                             )
                             .map_err(|err| Error::Context(err.into()))
                         });

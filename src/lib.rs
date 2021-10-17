@@ -46,6 +46,8 @@
     clippy::module_name_repetitions,
     clippy::pattern_type_mismatch,
     clippy::shadow_reuse,
+    clippy::shadow_unrelated,
+    clippy::shadow_same,
 
     // Need to be fixed
     clippy::expect_used,
@@ -98,7 +100,7 @@
     unused_lifetimes,
     unused_parens,
     unused_qualifications,
-    variant_size_differences,
+    // variant_size_differences,
     while_true
 )]
 // clippy::blacklisted_name,

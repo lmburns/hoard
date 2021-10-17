@@ -261,7 +261,7 @@ pub fn infer_format(file: Option<&PathBuf>, format_name: Option<&String>) -> Res
         tracing::trace!(format = ?format_name, file = ?file, ext = ?file.extension());
         file.extension()
             .and_then(OsStr::to_str)
-            .map_or(Err(Error::InferFormat), |ext| ConfigFormat::from_str(ext))
+            .map_or(Err(Error::InferFormat), ConfigFormat::from_str)
     } else {
         Err(Error::InferFormat)
     }

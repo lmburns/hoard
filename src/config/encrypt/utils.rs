@@ -70,8 +70,8 @@ pub fn get_tty() -> Option<PathBuf> {
 ///
 /// Panics if a depth of `SYMLINK_DEPTH_MAX` is reached to prevent infinite
 /// recursion.
-#[allow(clippy::panic)]
 fn resolve_symlink(path: &Path, depth: u8) -> Option<PathBuf> {
+    #[allow(clippy::if_then_panic, clippy::panic)]
     if depth >= SYMLINK_MAX_DEPTH {
         panic!("failed to resolve symlink because it is too deep, possible loop?");
     }

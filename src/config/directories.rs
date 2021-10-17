@@ -73,7 +73,7 @@ impl HoardProjectDirs {
                     });
 
                 #[cfg(not(target_os = "macos"))]
-                let config_dir_og = get_dirs().config_dir().to_path_buf();
+                let config_dir_og = Some(get_dirs().config_dir().to_path_buf());
 
                 config_dir_og.map(|d| d.join(env!("CARGO_PKG_NAME")))?
             };
@@ -103,7 +103,7 @@ impl HoardProjectDirs {
             });
 
         #[cfg(not(target_os = "macos"))]
-        let cache_dir_og = get_dirs().cache_dir().to_path_buf();
+        let cache_dir_og = Some(get_dirs().cache_dir().to_path_buf());
 
         cache_dir_og.map(|d| d.join(env!("CARGO_PKG_NAME")))
     }
@@ -125,7 +125,7 @@ impl HoardProjectDirs {
             });
 
         #[cfg(not(target_os = "macos"))]
-        let cache_dir_og = get_dirs().data_dir().to_path_buf();
+        let cache_dir_og = Some(get_dirs().data_dir().to_path_buf());
 
         cache_dir_og.map(|d| d.join(env!("CARGO_PKG_NAME")))
     }
@@ -157,12 +157,11 @@ impl HoardProjectDirs {
     pub fn home_dir(&self) -> &Path {
         &self.home_dir
     }
+}
 
-    /// Get all user directories (not for macOS)
-    #[must_use]
-    pub fn get_dirs() -> ProjectDirs {
-        tracing::trace!("determining project default folders");
-        ProjectDirs::from("com", "shadow53_lmburns", "hoard")
-            .expect("could not detect user home directory to place program files")
-    }
+/// Get all user directories (not for macOS)
+pub(crate) fn get_dirs() -> ProjectDirs {
+    tracing::trace!("determining project default folders");
+    ProjectDirs::from("com", "shadow53_lmburns", "hoard")
+        .expect("could not detect user home directory to place program files")
 }
